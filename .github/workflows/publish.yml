@@ -72,7 +72,7 @@ jobs:
           asset_name: manifest.json
           asset_content_type: application/json
       - name: Upload styles.css
-        id: upload styles
+        id: upload-styles
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
