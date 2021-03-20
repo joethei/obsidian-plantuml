@@ -1,112 +1,103 @@
-import { App, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import {
+    Plugin,
+    MarkdownPostProcessor,
+    MarkdownPostProcessorContext,
+    MarkdownPreviewRenderer,
+    PluginSettingTab,
+    App,
+    Setting
+} from 'obsidian';
 
-interface MyPluginSettings {
-	mySetting: string;
+import * as plantuml from 'plantuml-encoder'
+
+interface PlantUMLSettings {
+    server_url: string,
+    header: string;
 }
 
-const DEFAULT_SETTINGS: MyPluginSettings = {
-	mySetting: 'default'
+const DEFAULT_SETTINGS: PlantUMLSettings = {
+    server_url: 'https://plantuml.com/plantuml',
+    header: ''
 }
 
-export default class MyPlugin extends Plugin {
-	settings: MyPluginSettings;
+export default class PlantumlPlugin extends Plugin {
+    settings: PlantUMLSettings;
 
-	async onload() {
-		console.log('loading plugin');
+    postprocessor: MarkdownPostProcessor = async (el: HTMLElement, _: MarkdownPostProcessorContext) => {
+        const blockToReplace = el.querySelector('pre');
+        if (!blockToReplace) return;
 
-		await this.loadSettings();
+        const block = blockToReplace.querySelector('code.language-plantuml');
+        if (!block) return;
 
-		this.addRibbonIcon('dice', 'Sample Plugin', () => {
-			new Notice('This is a notice!');
-		});
+        const dest = document.createElement('img');
 
-		this.addStatusBarItem().setText('Status Bar Text');
+        const prefix = this.settings.server_url + "/png/";
+        const encoded = plantuml.encode(this.settings.header + block.textContent);
 
-		this.addCommand({
-			id: 'open-sample-modal',
-			name: 'Open Sample Modal',
-			// callback: () => {
-			// 	console.log('Simple Callback');
-			// },
-			checkCallback: (checking: boolean) => {
-				let leaf = this.app.workspace.activeLeaf;
-				if (leaf) {
-					if (!checking) {
-						new SampleModal(this.app).open();
-					}
-					return true;
-				}
-				return false;
-			}
-		});
+        dest.src = prefix + encoded;
 
-		this.addSettingTab(new SampleSettingTab(this.app, this));
+        el.replaceChild(dest, blockToReplace);
+    }
 
-		this.registerCodeMirror((cm: CodeMirror.Editor) => {
-			console.log('codemirror', cm);
-		});
+    async onload(): Promise<void> {
+        console.log('loading plugin plantuml');
+        await this.loadSettings();
+        MarkdownPreviewRenderer.registerPostProcessor(this.postprocessor);
+        this.addSettingTab(new PlantUMLSettingsTab(this.app, this));
+    }
 
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
-			console.log('click', evt);
-		});
+    onunload() : void {
+        console.log('unloading plugin plantuml');
+        MarkdownPreviewRenderer.unregisterPostProcessor(this.postprocessor);
+    }
 
-		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
-	}
+    async loadSettings() : Promise<void> {
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    }
 
-	onunload() {
-		console.log('unloading plugin');
-	}
-
-	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-	}
-
-	async saveSettings() {
-		await this.saveData(this.settings);
-	}
+    async saveSettings() : Promise<void> {
+        await this.saveData(this.settings);
+    }
 }
 
-class SampleModal extends Modal {
-	constructor(app: App) {
-		super(app);
-	}
+class PlantUMLSettingsTab extends PluginSettingTab {
+    plugin: PlantumlPlugin;
 
-	onOpen() {
-		let {contentEl} = this;
-		contentEl.setText('Woah!');
-	}
+    constructor(app: App, plugin: PlantumlPlugin) {
+        super(app, plugin);
+        this.plugin = plugin;
+    }
 
-	onClose() {
-		let {contentEl} = this;
-		contentEl.empty();
-	}
+    display(): void {
+        const {containerEl} = this;
+
+        containerEl.empty();
+
+        new Setting(containerEl).setName("Server URL")
+            .setDesc("PlantUML Server URL")
+            .addText(text => text.setPlaceholder(DEFAULT_SETTINGS.server_url)
+                .setValue(this.plugin.settings.server_url)
+                .onChange(async (value) => {
+                        this.plugin.settings.server_url = value;
+                        await this.plugin.saveSettings();
+                    }
+                )
+            );
+        new Setting(containerEl).setName("Header")
+            .setDesc("Included at the head in every diagram. Useful for specifying a common theme (.puml file)")
+            .addTextArea(text => {
+                    text.setPlaceholder("!include https://raw.githubusercontent.com/....puml\n")
+                        .setValue(this.plugin.settings.header)
+                        .onChange(async (value) => {
+                                this.plugin.settings.header = value;
+                                await this.plugin.saveSettings();
+                            }
+                        )
+                    text.inputEl.setAttr("rows", 4);
+                    text.inputEl.addClass("settings_area")
+                }
+            );
+    }
 }
 
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
-
-	constructor(app: App, plugin: MyPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
-
-	display(): void {
-		let {containerEl} = this;
-
-		containerEl.empty();
-
-		containerEl.createEl('h2', {text: 'Settings for my awesome plugin.'});
-
-		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
-			.addText(text => text
-				.setPlaceholder('Enter your secret')
-				.setValue('')
-				.onChange(async (value) => {
-					console.log('Secret: ' + value);
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
-	}
-}

@@ -1,4 +1,6 @@
-/* Sets all the text color to red! */
-body {
-    color: red;
+.settings_area {
+    margin-left: 5px;
+    margin-right: 5px;
+    font-size: 14px;
+    width: 100%;
 }

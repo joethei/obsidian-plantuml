@@ -1,10 +1,10 @@
 {
-	"id": "obsidian-sample-plugin",
-	"name": "Sample Plugin",
-	"version": "1.0.1",
-	"minAppVersion": "0.9.12",
-	"description": "This is a sample plugin for Obsidian. This plugin demonstrates some of the capabilities of the Obsidian API.",
-	"author": "Obsidian",
-	"authorUrl": "https://obsidian.md/about",
+	"id": "obsidian-plantuml",
+	"name": "PlantUML",
+	"version": "1.0.0",
+	"minAppVersion": "0.11.5",
+	"description": "Render PlantUML Diagrams",
+	"author": "Johannes Theiner",
+	"authorUrl": "https://github.com/joethei/",
 	"isDesktopOnly": false
 }
