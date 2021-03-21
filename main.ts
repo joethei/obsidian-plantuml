@@ -1,8 +1,6 @@
 import {
     Plugin,
-    MarkdownPostProcessor,
     MarkdownPostProcessorContext,
-    MarkdownPreviewRenderer,
     PluginSettingTab,
     App,
     Setting
@@ -23,33 +21,48 @@ const DEFAULT_SETTINGS: PlantUMLSettings = {
 export default class PlantumlPlugin extends Plugin {
     settings: PlantUMLSettings;
 
-    postprocessor: MarkdownPostProcessor = async (el: HTMLElement, _: MarkdownPostProcessorContext) => {
-        const blockToReplace = el.querySelector('pre');
-        if (!blockToReplace) return;
-
-        const block = blockToReplace.querySelector('code.language-plantuml');
-        if (!block) return;
-
+    pngProcessor = async (source: string, el: HTMLElement, _: MarkdownPostProcessorContext) => {
         const dest = document.createElement('img');
-
         const prefix = this.settings.server_url + "/png/";
-        const encoded = plantuml.encode(this.settings.header + block.textContent);
+        source = source.replaceAll("&nbsp;", " ");
+
+        const encoded = plantuml.encode(this.settings.header + "\r\n" + source);
 
         dest.src = prefix + encoded;
 
-        el.replaceChild(dest, blockToReplace);
+        el.appendChild(dest);
+    };
+
+    asciiProcessor = async (source: string, el: HTMLElement, _: MarkdownPostProcessorContext) => {
+        const prefix = this.settings.server_url + "/txt/";
+        source = source.replaceAll("&nbsp;", " ");
+
+        const encoded = plantuml.encode(this.settings.header + "\r\n" + source);
+        const result = await fetch(prefix + encoded, {
+            method: "GET",
+        });
+
+        if(result.ok) {
+            const text = await result.text();
+
+            const pre = document.createElement("pre");
+            const code = document.createElement("code");
+            pre.appendChild(code);
+            code.setText(text);
+            el.appendChild(pre);
+        }
     }
 
     async onload(): Promise<void> {
         console.log('loading plugin plantuml');
         await this.loadSettings();
-        MarkdownPreviewRenderer.registerPostProcessor(this.postprocessor);
         this.addSettingTab(new PlantUMLSettingsTab(this.app, this));
+        this.registerMarkdownCodeBlockProcessor("plantuml", this.pngProcessor);
+        this.registerMarkdownCodeBlockProcessor("plantuml-ascii", this.asciiProcessor);
     }
 
     onunload() : void {
         console.log('unloading plugin plantuml');
-        MarkdownPreviewRenderer.unregisterPostProcessor(this.postprocessor);
     }
 
     async loadSettings() : Promise<void> {
@@ -100,4 +113,3 @@ class PlantUMLSettingsTab extends PluginSettingTab {
             );
     }
 }
-
