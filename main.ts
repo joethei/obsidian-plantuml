@@ -1,10 +1,4 @@
-import {
-    Plugin,
-    MarkdownPostProcessorContext,
-    PluginSettingTab,
-    App,
-    Setting
-} from 'obsidian';
+import {App, MarkdownPostProcessorContext, Plugin, PluginSettingTab, Setting} from 'obsidian';
 
 import * as plantuml from 'plantuml-encoder'
 
@@ -30,6 +24,32 @@ export default class PlantumlPlugin extends Plugin {
 
         dest.src = prefix + encoded;
 
+        el.appendChild(dest);
+    };
+
+    mapProcessor = async (source: string, el: HTMLElement, _: MarkdownPostProcessorContext) => {
+        const dest = document.createElement('div');
+        let prefix = this.settings.server_url + "/png/";
+        source = source.replaceAll("&nbsp;", " ");
+
+        const encoded = plantuml.encode(this.settings.header + "\r\n" + source);
+
+        const img = document.createElement("img");
+        img.src = prefix + encoded;
+        img.useMap = "#" + encoded;
+
+        prefix = this.settings.server_url + "/map/";
+
+        const result = await fetch(prefix + encoded, {
+            method: "GET"
+        });
+
+        if(result.ok) {
+            dest.innerHTML = await result.text();
+            dest.children[0].setAttr("name", encoded);
+            console.log(dest);
+        }
+        dest.appendChild(img);
         el.appendChild(dest);
     };
 
@@ -59,6 +79,7 @@ export default class PlantumlPlugin extends Plugin {
         this.addSettingTab(new PlantUMLSettingsTab(this.app, this));
         this.registerMarkdownCodeBlockProcessor("plantuml", this.pngProcessor);
         this.registerMarkdownCodeBlockProcessor("plantuml-ascii", this.asciiProcessor);
+        this.registerMarkdownCodeBlockProcessor("plantuml-map", this.mapProcessor);
     }
 
     onunload() : void {

@@ -12,8 +12,11 @@ You can also host your own server
 [PicoWeb](https://plantuml.com/de/picoweb)) and specify its address in the settings.
 
 ## Usage
-Create a fenced codeblock using 'plantuml' as the language.
+Create a fenced codeblock using `plantuml` as the language.
 Specify your plantuml code inside.
+
+You can also use `plantuml-ascii` to generate ASCII Art, or `plantuml-map` to generate a png image
+with clickable links.
 
 Documentation on Plantuml can be found on [plantuml.com](https://plantuml.com/)
 
@@ -48,7 +51,7 @@ results in:
     Alice -> Bob: hello
     ```
 ```
-Results in:
+results in:
 ```
      ┌───┐          ┌─────┐          ┌──────────┐          ┌────┐          ┌────┐
      │Bob│          │Alice│          │Wonderland│          │next│          │Last│
@@ -80,6 +83,7 @@ Results in:
      │Bob│          │Alice│          │Wonderland│          │next│          │Last│
      └───┘          └─────┘          └──────────┘          └────┘          └────┘
 ```
+
 
 ## Installation
 
