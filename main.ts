@@ -14,7 +14,7 @@ interface PlantUMLSettings {
 }
 
 const DEFAULT_SETTINGS: PlantUMLSettings = {
-    server_url: 'https://plantuml.com/plantuml',
+    server_url: 'https://www.plantuml.com/plantuml',
     header: ''
 }
 
@@ -39,7 +39,7 @@ export default class PlantumlPlugin extends Plugin {
 
         const encoded = plantuml.encode(this.settings.header + "\r\n" + source);
         const result = await fetch(prefix + encoded, {
-            method: "GET",
+            method: "GET"
         });
 
         if(result.ok) {
@@ -51,7 +51,7 @@ export default class PlantumlPlugin extends Plugin {
             code.setText(text);
             el.appendChild(pre);
         }
-    }
+    };
 
     async onload(): Promise<void> {
         console.log('loading plugin plantuml');
