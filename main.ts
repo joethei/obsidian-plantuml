@@ -18,7 +18,7 @@ export default class PlantumlPlugin extends Plugin {
     pngProcessor = async (source: string, el: HTMLElement, _: MarkdownPostProcessorContext) => {
         const dest = document.createElement('img');
         const prefix = this.settings.server_url + "/png/";
-        source = source.replaceAll("&nbsp;", " ");
+        source = source.replace(/&nbsp;/gi, " ");
 
         const encoded = plantuml.encode(this.settings.header + "\r\n" + source);
 
@@ -30,7 +30,7 @@ export default class PlantumlPlugin extends Plugin {
     mapProcessor = async (source: string, el: HTMLElement, _: MarkdownPostProcessorContext) => {
         const dest = document.createElement('div');
         let prefix = this.settings.server_url + "/png/";
-        source = source.replaceAll("&nbsp;", " ");
+        source = source.replace(/&nbsp;/gi, " ");
 
         const encoded = plantuml.encode(this.settings.header + "\r\n" + source);
 
@@ -47,7 +47,6 @@ export default class PlantumlPlugin extends Plugin {
         if(result.ok) {
             dest.innerHTML = await result.text();
             dest.children[0].setAttr("name", encoded);
-            console.log(dest);
         }
         dest.appendChild(img);
         el.appendChild(dest);
@@ -55,7 +54,7 @@ export default class PlantumlPlugin extends Plugin {
 
     asciiProcessor = async (source: string, el: HTMLElement, _: MarkdownPostProcessorContext) => {
         const prefix = this.settings.server_url + "/txt/";
-        source = source.replaceAll("&nbsp;", " ");
+        source = source.replace(/&nbsp;/gi, " ");
 
         const encoded = plantuml.encode(this.settings.header + "\r\n" + source);
         const result = await fetch(prefix + encoded, {
