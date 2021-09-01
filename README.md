@@ -15,8 +15,7 @@ You can also host your own server
 Create a fenced codeblock using `plantuml` as the language.
 Specify your plantuml code inside.
 
-You can also use `plantuml-ascii` to generate ASCII Art, or `plantuml-map` to generate a png image
-with clickable links.
+You can also use `plantuml-ascii` to generate ASCII Art.
 
 Documentation on Plantuml can be found on [plantuml.com](https://plantuml.com/)
 

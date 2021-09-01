@@ -1,33 +1,32 @@
-import {App, MarkdownPostProcessorContext, Plugin, PluginSettingTab, Setting} from 'obsidian';
+import {
+    App,
+    debounce,
+    MarkdownPostProcessorContext,
+    Notice,
+    Plugin,
+    PluginSettingTab,
+    request,
+    Setting
+} from 'obsidian';
 
 import * as plantuml from 'plantuml-encoder'
 
 interface PlantUMLSettings {
     server_url: string,
     header: string;
+    debounce: number;
 }
 
 const DEFAULT_SETTINGS: PlantUMLSettings = {
     server_url: 'https://www.plantuml.com/plantuml',
-    header: ''
+    header: '',
+    debounce: 10,
 }
 
 export default class PlantumlPlugin extends Plugin {
     settings: PlantUMLSettings;
 
-    pngProcessor = async (source: string, el: HTMLElement, _: MarkdownPostProcessorContext) => {
-        const dest = document.createElement('img');
-        const prefix = this.settings.server_url + "/png/";
-        source = source.replace(/&nbsp;/gi, " ");
-
-        const encoded = plantuml.encode(this.settings.header + "\r\n" + source);
-
-        dest.src = prefix + encoded;
-
-        el.appendChild(dest);
-    };
-
-    mapProcessor = async (source: string, el: HTMLElement, _: MarkdownPostProcessorContext) => {
+    imageProcessor = async (source: string, el: HTMLElement, _: MarkdownPostProcessorContext): Promise<void> => {
         const dest = document.createElement('div');
         let prefix = this.settings.server_url + "/png/";
         source = source.replace(/&nbsp;/gi, " ");
@@ -40,56 +39,52 @@ export default class PlantumlPlugin extends Plugin {
 
         prefix = this.settings.server_url + "/map/";
 
-        const result = await fetch(prefix + encoded, {
-            method: "GET"
-        });
+        dest.innerHTML = await request({url: prefix + encoded, method: "GET"});
+        dest.children[0].setAttr("name", encoded);
 
-        if(result.ok) {
-            dest.innerHTML = await result.text();
-            dest.children[0].setAttr("name", encoded);
-        }
         dest.appendChild(img);
         el.appendChild(dest);
     };
 
-    asciiProcessor = async (source: string, el: HTMLElement, _: MarkdownPostProcessorContext) => {
+    asciiProcessor = async (source: string, el: HTMLElement, _: MarkdownPostProcessorContext): Promise<void> => {
         const prefix = this.settings.server_url + "/txt/";
         source = source.replace(/&nbsp;/gi, " ");
 
         const encoded = plantuml.encode(this.settings.header + "\r\n" + source);
-        const result = await fetch(prefix + encoded, {
-            method: "GET"
-        });
 
-        if(result.ok) {
-            const text = await result.text();
+        const result = await request({url: prefix + encoded});
 
-            const pre = document.createElement("pre");
-            const code = document.createElement("code");
-            pre.appendChild(code);
-            code.setText(text);
-            el.appendChild(pre);
-        }
+        const pre = document.createElement("pre");
+        const code = document.createElement("code");
+        pre.appendChild(code);
+        code.setText(result);
+        el.appendChild(pre);
     };
 
     async onload(): Promise<void> {
         console.log('loading plugin plantuml');
         await this.loadSettings();
         this.addSettingTab(new PlantUMLSettingsTab(this.app, this));
-        this.registerMarkdownCodeBlockProcessor("plantuml", this.pngProcessor);
-        this.registerMarkdownCodeBlockProcessor("plantuml-ascii", this.asciiProcessor);
-        this.registerMarkdownCodeBlockProcessor("plantuml-map", this.mapProcessor);
+
+        const asciiProcessorDebounce = debounce(this.asciiProcessor, this.settings.debounce, true);
+        const imageProcessorDebounce = debounce(this.imageProcessor, this.settings.debounce, true);
+
+        this.registerMarkdownCodeBlockProcessor("plantuml", imageProcessorDebounce);
+        this.registerMarkdownCodeBlockProcessor("plantuml-ascii", asciiProcessorDebounce);
+
+        //keep this processor for backwards compatibility
+        this.registerMarkdownCodeBlockProcessor("plantuml-map", imageProcessorDebounce);
     }
 
-    onunload() : void {
+    onunload(): void {
         console.log('unloading plugin plantuml');
     }
 
-    async loadSettings() : Promise<void> {
+    async loadSettings(): Promise<void> {
         this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
     }
 
-    async saveSettings() : Promise<void> {
+    async saveSettings(): Promise<void> {
         await this.saveData(this.settings);
     }
 }
@@ -131,5 +126,18 @@ class PlantUMLSettingsTab extends PluginSettingTab {
                     text.inputEl.addClass("settings_area")
                 }
             );
+        new Setting(containerEl).setName("Debounce")
+            .setDesc("How often should the diagram refresh in seconds")
+            .addText(text => text.setPlaceholder(String(DEFAULT_SETTINGS.debounce))
+                .setValue(String(this.plugin.settings.debounce))
+                .onChange(async (value) => {
+                    if(!isNaN(Number(value))) {
+                        this.plugin.settings.debounce = Number(value);
+                        await this.plugin.saveSettings();
+                    }else {
+                        new Notice("Please specify a valid number");
+                    }
+
+                }));
     }
 }
