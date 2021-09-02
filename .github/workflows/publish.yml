@@ -24,7 +24,7 @@ jobs:
         run: |
           npm install -g yarn
           yarn
-          yarn run build --if-present
+          yarn run build 
           mkdir ${{ env.PLUGIN_NAME }}
           cp main.js manifest.json ${{ env.PLUGIN_NAME }}
           zip -r ${{ env.PLUGIN_NAME }}.zip ${{ env.PLUGIN_NAME }}
