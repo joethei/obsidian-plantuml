@@ -28,7 +28,13 @@ export default class PlantumlPlugin extends Plugin {
 
     imageProcessor = async (source: string, el: HTMLElement, _: MarkdownPostProcessorContext): Promise<void> => {
         const dest = document.createElement('div');
-        let prefix = this.settings.server_url + "/png/";
+        let url = this.settings.server_url;
+        if(url.length == 0) {
+            url = DEFAULT_SETTINGS.server_url;
+        }
+
+        let prefix = url + "/png/";
+
         source = source.replace(/&nbsp;/gi, " ");
 
         const encoded = plantuml.encode(this.settings.header + "\r\n" + source);
@@ -37,7 +43,7 @@ export default class PlantumlPlugin extends Plugin {
         img.src = prefix + encoded;
         img.useMap = "#" + encoded;
 
-        prefix = this.settings.server_url + "/map/";
+        prefix = url + "/map/";
 
         dest.innerHTML = await request({url: prefix + encoded, method: "GET"});
         dest.children[0].setAttr("name", encoded);
@@ -47,7 +53,11 @@ export default class PlantumlPlugin extends Plugin {
     };
 
     asciiProcessor = async (source: string, el: HTMLElement, _: MarkdownPostProcessorContext): Promise<void> => {
-        const prefix = this.settings.server_url + "/txt/";
+        let url = this.settings.server_url;
+        if(url.length == 0) {
+            url = DEFAULT_SETTINGS.server_url;
+        }
+        const prefix = url + "/txt/";
         source = source.replace(/&nbsp;/gi, " ");
 
         const encoded = plantuml.encode(this.settings.header + "\r\n" + source);
@@ -66,8 +76,8 @@ export default class PlantumlPlugin extends Plugin {
         await this.loadSettings();
         this.addSettingTab(new PlantUMLSettingsTab(this.app, this));
 
-        const asciiProcessorDebounce = debounce(this.asciiProcessor, this.settings.debounce, true);
-        const imageProcessorDebounce = debounce(this.imageProcessor, this.settings.debounce, true);
+        const asciiProcessorDebounce = debounce(this.asciiProcessor, this.settings.debounce * 1000, true);
+        const imageProcessorDebounce = debounce(this.imageProcessor, this.settings.debounce * 1000, true);
 
         this.registerMarkdownCodeBlockProcessor("plantuml", imageProcessorDebounce);
         this.registerMarkdownCodeBlockProcessor("plantuml-ascii", asciiProcessorDebounce);
