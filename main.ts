@@ -35,6 +35,7 @@ export default class PlantumlPlugin extends Plugin {
 
         let prefix = url + "/png/";
 
+        //replace all non breaking spaces with actual spaces,
         source = source.replace(/&nbsp;/gi, " ");
 
         const encoded = plantuml.encode(this.settings.header + "\r\n" + source);
@@ -43,13 +44,17 @@ export default class PlantumlPlugin extends Plugin {
         img.src = prefix + encoded;
         img.useMap = "#" + encoded;
 
+
         prefix = url + "/map/";
 
-        dest.innerHTML = await request({url: prefix + encoded, method: "GET"});
-        dest.children[0].setAttr("name", encoded);
+        request({url: prefix + encoded, method: "GET"}).then((value) => {
+            dest.innerHTML = value;
+            dest.children[0].setAttr("name", encoded);
+        }).finally(() => {
+            dest.appendChild(img);
+            el.appendChild(dest);
+        });
 
-        dest.appendChild(img);
-        el.appendChild(dest);
     };
 
     asciiProcessor = async (source: string, el: HTMLElement, _: MarkdownPostProcessorContext): Promise<void> => {
