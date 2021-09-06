@@ -26,10 +26,10 @@ const DEFAULT_SETTINGS: PlantUMLSettings = {
 export default class PlantumlPlugin extends Plugin {
     settings: PlantUMLSettings;
 
-    imageProcessor = async (source: string, el: HTMLElement, _: MarkdownPostProcessorContext): Promise<void> => {
+    imageProcessor = async (source: string, el: HTMLElement, _ : MarkdownPostProcessorContext) : Promise<void> => {
         const dest = document.createElement('div');
         let url = this.settings.server_url;
-        if(url.length == 0) {
+        if (url.length == 0) {
             url = DEFAULT_SETTINGS.server_url;
         }
 
@@ -44,7 +44,6 @@ export default class PlantumlPlugin extends Plugin {
         img.src = prefix + encoded;
         img.useMap = "#" + encoded;
 
-
         prefix = url + "/map/";
 
         request({url: prefix + encoded, method: "GET"}).then((value) => {
@@ -54,8 +53,7 @@ export default class PlantumlPlugin extends Plugin {
             dest.appendChild(img);
             el.appendChild(dest);
         });
-
-    };
+    }
 
     asciiProcessor = async (source: string, el: HTMLElement, _: MarkdownPostProcessorContext): Promise<void> => {
         let url = this.settings.server_url;
@@ -81,8 +79,20 @@ export default class PlantumlPlugin extends Plugin {
         await this.loadSettings();
         this.addSettingTab(new PlantUMLSettingsTab(this.app, this));
 
-        const asciiProcessorDebounce = debounce(this.asciiProcessor, this.settings.debounce * 1000, true);
-        const imageProcessorDebounce = debounce(this.imageProcessor, this.settings.debounce * 1000, true);
+        this.resetDebounceTimer();
+    }
+
+    resetDebounceTimer() : void {
+        let debounceTime;
+        if(this.settings.debounce === undefined) {
+            debounceTime = DEFAULT_SETTINGS.debounce;
+        }else {
+            debounceTime = this.settings.debounce;
+        }
+        debounceTime = debounceTime * 1000;
+
+        const imageProcessorDebounce = debounce(this.imageProcessor, debounceTime, true);
+        const asciiProcessorDebounce = debounce(this.asciiProcessor, debounceTime, true);
 
         this.registerMarkdownCodeBlockProcessor("plantuml", imageProcessorDebounce);
         this.registerMarkdownCodeBlockProcessor("plantuml-ascii", asciiProcessorDebounce);
@@ -149,6 +159,7 @@ class PlantUMLSettingsTab extends PluginSettingTab {
                     if(!isNaN(Number(value))) {
                         this.plugin.settings.debounce = Number(value);
                         await this.plugin.saveSettings();
+                        this.plugin.resetDebounceTimer();
                     }else {
                         new Notice("Please specify a valid number");
                     }
