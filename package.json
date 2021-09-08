@@ -1,6 +1,6 @@
 {
   "name": "obsidian-plantuml",
-  "version": "1.1.2",
+  "version": "1.2.3",
   "description": "PlantUML rendering for obsidian.md",
   "main": "main.js",
   "scripts": {

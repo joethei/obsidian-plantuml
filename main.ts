@@ -11,6 +11,8 @@ import {
 
 import * as plantuml from 'plantuml-encoder'
 
+const SECONDS_TO_MS_FACTOR = 1000;
+
 interface PlantUMLSettings {
     server_url: string,
     header: string;
@@ -27,45 +29,53 @@ export default class PlantumlPlugin extends Plugin {
     settings: PlantUMLSettings;
 
     imageProcessor = async (source: string, el: HTMLElement, _ : MarkdownPostProcessorContext) : Promise<void> => {
-        const dest = document.createElement('div');
+
+        //make sure url is defined, once the setting gets reset to default, an empty string will be returned by settings
         let url = this.settings.server_url;
         if (url.length == 0) {
             url = DEFAULT_SETTINGS.server_url;
         }
 
-        let prefix = url + "/png/";
+        const imageUrlBase = url + "/png/";
 
-        //replace all non breaking spaces with actual spaces,
+        //replace all non breaking spaces with actual spaces
         source = source.replace(/&nbsp;/gi, " ");
 
-        const encoded = plantuml.encode(this.settings.header + "\r\n" + source);
+        const encodedDiagram = plantuml.encode(this.settings.header + "\r\n" + source);
+
+        console.log("loading diagram from: " + imageUrlBase + encodedDiagram);
 
         const img = document.createElement("img");
-        img.src = prefix + encoded;
-        img.useMap = "#" + encoded;
+        img.src = imageUrlBase + encodedDiagram;
+        img.useMap = "#" + encodedDiagram;
 
-        prefix = url + "/map/";
 
-        request({url: prefix + encoded, method: "GET"}).then((value) => {
-            dest.innerHTML = value;
-            dest.children[0].setAttr("name", encoded);
+        //get image map data to support clicking links in diagrams
+        const mapUrlBase = url + "/map/";
+        request({url: mapUrlBase + encodedDiagram, method: "GET"}).then((value) => {
+            el.innerHTML = value;
+            el.children[0].setAttr("name", encodedDiagram);
+        }).catch((error) => {
+            console.error(error);
         }).finally(() => {
-            dest.appendChild(img);
-            el.appendChild(dest);
+            el.appendChild(img);
         });
     }
 
     asciiProcessor = async (source: string, el: HTMLElement, _: MarkdownPostProcessorContext): Promise<void> => {
+
+        //make sure url is defined, once the setting gets reset to default, an empty string will be returned by settings
         let url = this.settings.server_url;
         if(url.length == 0) {
             url = DEFAULT_SETTINGS.server_url;
         }
-        const prefix = url + "/txt/";
+        const asciiUrlBase = url + "/txt/";
+        //replace all non breaking spaces with actual spaces
         source = source.replace(/&nbsp;/gi, " ");
 
-        const encoded = plantuml.encode(this.settings.header + "\r\n" + source);
+        const encodedDiagram = plantuml.encode(this.settings.header + "\r\n" + source);
 
-        const result = await request({url: prefix + encoded});
+        const result = await request({url: asciiUrlBase + encodedDiagram});
 
         const pre = document.createElement("pre");
         const code = document.createElement("code");
@@ -79,17 +89,14 @@ export default class PlantumlPlugin extends Plugin {
         await this.loadSettings();
         this.addSettingTab(new PlantUMLSettingsTab(this.app, this));
 
-        this.resetDebounceTimer();
+        this.updateDebounceTimer();
     }
 
-    resetDebounceTimer() : void {
-        let debounceTime;
-        if(this.settings.debounce === undefined) {
-            debounceTime = DEFAULT_SETTINGS.debounce;
-        }else {
-            debounceTime = this.settings.debounce;
-        }
-        debounceTime = debounceTime * 1000;
+    //make sure the debounce timer is updated on every settings change
+    updateDebounceTimer() : void {
+        let debounceTime = this.settings.debounce;
+        console.log("debounce time set to " + debounceTime + " seconds");
+        debounceTime = debounceTime * SECONDS_TO_MS_FACTOR;
 
         const imageProcessorDebounce = debounce(this.imageProcessor, debounceTime, true);
         const asciiProcessorDebounce = debounce(this.asciiProcessor, debounceTime, true);
@@ -156,10 +163,12 @@ class PlantUMLSettingsTab extends PluginSettingTab {
             .addText(text => text.setPlaceholder(String(DEFAULT_SETTINGS.debounce))
                 .setValue(String(this.plugin.settings.debounce))
                 .onChange(async (value) => {
-                    if(!isNaN(Number(value))) {
-                        this.plugin.settings.debounce = Number(value);
+
+                    //make sure that there is always some value defined, or reset to default
+                    if(!isNaN(Number(value)) || value === undefined) {
+                        this.plugin.settings.debounce = Number(value || DEFAULT_SETTINGS.debounce);
                         await this.plugin.saveSettings();
-                        this.plugin.resetDebounceTimer();
+                        this.plugin.updateDebounceTimer();
                     }else {
                         new Notice("Please specify a valid number");
                     }
