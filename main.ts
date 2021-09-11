@@ -1,12 +1,12 @@
 import {
     App,
     debounce,
-    MarkdownPostProcessorContext,
+    MarkdownPostProcessorContext, MarkdownView,
     Notice,
     Plugin,
     PluginSettingTab,
     request,
-    Setting
+    Setting, WorkspaceLeaf
 } from 'obsidian';
 
 import * as plantuml from 'plantuml-encoder'
@@ -28,9 +28,31 @@ const DEFAULT_SETTINGS: PlantUMLSettings = {
 export default class PlantumlPlugin extends Plugin {
     settings: PlantUMLSettings;
 
-    imageProcessor = async (source: string, el: HTMLElement, _ : MarkdownPostProcessorContext) : Promise<void> => {
+    /* Will get active view, or first preview view with same file as active view */
+    getId(element: HTMLElement): number {
+        let index: number;
+        const leaves = this.app.workspace.getLeavesOfType("markdown");
+        leaves.forEach((leaf: WorkspaceLeaf) => {
+            const view = leaf.view as MarkdownView;
+            if (view.getMode() == "preview") {
+                const previewContent = view.contentEl.querySelector(".markdown-preview-sizer");
+                const blocks = previewContent.querySelectorAll(".block-language-plantuml");
+                console.log(blocks.length);
+                previewContent.childNodes.forEach((node: ChildNode) => {
+                    console.log(node);
+                    if(element.isSameNode(node)) {
+                        index = previewContent.indexOf(node);
+                    }
+                })
+            }
+        })
 
-        //make sure url is defined, once the setting gets reset to default, an empty string will be returned by settings
+        return index;
+    }
+
+    imageProcessor = async (source: string, el: HTMLElement, _: MarkdownPostProcessorContext): Promise<void> => {
+
+        //make sure url is defined. once the setting gets reset to default, an empty string will be returned by settings
         let url = this.settings.server_url;
         if (url.length == 0) {
             url = DEFAULT_SETTINGS.server_url;
@@ -49,12 +71,14 @@ export default class PlantumlPlugin extends Plugin {
         img.src = imageUrlBase + encodedDiagram;
         img.useMap = "#" + encodedDiagram;
 
-
         //get image map data to support clicking links in diagrams
         const mapUrlBase = url + "/map/";
         request({url: mapUrlBase + encodedDiagram, method: "GET"}).then((value) => {
-            el.innerHTML = value;
-            el.children[0].setAttr("name", encodedDiagram);
+            //only add the map content if actual text is returned(e.g. PicoWeb does not support this)
+            if (value.contains("<map>")) {
+                el.innerHTML = value;
+                el.children[0].setAttr("name", encodedDiagram);
+            }
         }).catch((error) => {
             console.error(error);
         }).finally(() => {
@@ -63,10 +87,9 @@ export default class PlantumlPlugin extends Plugin {
     }
 
     asciiProcessor = async (source: string, el: HTMLElement, _: MarkdownPostProcessorContext): Promise<void> => {
-
         //make sure url is defined, once the setting gets reset to default, an empty string will be returned by settings
         let url = this.settings.server_url;
-        if(url.length == 0) {
+        if (url.length == 0) {
             url = DEFAULT_SETTINGS.server_url;
         }
         const asciiUrlBase = url + "/txt/";
@@ -76,6 +99,14 @@ export default class PlantumlPlugin extends Plugin {
         const encodedDiagram = plantuml.encode(this.settings.header + "\r\n" + source);
 
         const result = await request({url: asciiUrlBase + encodedDiagram});
+
+        if(result.startsWith("�PNG")) {
+            const text = document.createElement("p");
+            text.style.color = "red";
+            text.innerText = "Your PlantUML Server does not support ASCII Art";
+            el.appendChild(text);
+            return;
+        }
 
         const pre = document.createElement("pre");
         const code = document.createElement("code");
@@ -89,24 +120,25 @@ export default class PlantumlPlugin extends Plugin {
         await this.loadSettings();
         this.addSettingTab(new PlantUMLSettingsTab(this.app, this));
 
-        this.updateDebounceTimer();
-    }
+        //let debounceTime = this.settings.debounce;
+        //console.log("debounce time set to " + debounceTime + " seconds");
+        //debounceTime = debounceTime * SECONDS_TO_MS_FACTOR;
 
-    //make sure the debounce timer is updated on every settings change
-    updateDebounceTimer() : void {
-        let debounceTime = this.settings.debounce;
-        console.log("debounce time set to " + debounceTime + " seconds");
-        debounceTime = debounceTime * SECONDS_TO_MS_FACTOR;
+        //currently just redirecting to other method to disable debounce, as the first implementation was flawed.
+        const imageProcessorDebounce = (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+          this.imageProcessor(source, el, ctx);
+        }
 
-        const imageProcessorDebounce = debounce(this.imageProcessor, debounceTime, true);
-        const asciiProcessorDebounce = debounce(this.asciiProcessor, debounceTime, true);
+        const asciiProcessorDebounce = (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+            this.asciiProcessor(source, el, ctx);
+        }
 
-        this.registerMarkdownCodeBlockProcessor("plantuml", imageProcessorDebounce);
-        this.registerMarkdownCodeBlockProcessor("plantuml-ascii", asciiProcessorDebounce);
+            this.registerMarkdownCodeBlockProcessor("plantuml", imageProcessorDebounce);
+            this.registerMarkdownCodeBlockProcessor("plantuml-ascii", asciiProcessorDebounce);
 
-        //keep this processor for backwards compatibility
-        this.registerMarkdownCodeBlockProcessor("plantuml-map", imageProcessorDebounce);
-    }
+            //keep this processor for backwards compatibility
+            this.registerMarkdownCodeBlockProcessor("plantuml-map", imageProcessorDebounce);
+        }
 
     onunload(): void {
         console.log('unloading plugin plantuml');
@@ -159,20 +191,17 @@ class PlantUMLSettingsTab extends PluginSettingTab {
                 }
             );
         new Setting(containerEl).setName("Debounce")
-            .setDesc("How often should the diagram refresh in seconds")
+            .setDesc("How often should the diagram refresh in seconds(currently not used due to flawed implementation)")
             .addText(text => text.setPlaceholder(String(DEFAULT_SETTINGS.debounce))
                 .setValue(String(this.plugin.settings.debounce))
                 .onChange(async (value) => {
-
                     //make sure that there is always some value defined, or reset to default
-                    if(!isNaN(Number(value)) || value === undefined) {
+                    if (!isNaN(Number(value)) || value === undefined) {
                         this.plugin.settings.debounce = Number(value || DEFAULT_SETTINGS.debounce);
                         await this.plugin.saveSettings();
-                        this.plugin.updateDebounceTimer();
-                    }else {
+                    } else {
                         new Notice("Please specify a valid number");
                     }
-
                 }));
     }
 }
