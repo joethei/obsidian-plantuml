@@ -14,10 +14,39 @@ You can also host your own server
 ## Usage
 Create a fenced codeblock using `plantuml` as the language.
 Specify your plantuml code inside.
+To generate a diagram with higher resolution use `plantuml-svg``
 
 You can also use `plantuml-ascii` to generate ASCII Art.
 
 Documentation on Plantuml can be found on [plantuml.com](https://plantuml.com/)
+
+<!--
+TODO: Test all different combinations, also test with all server variants
+## Compatibility
+
+| |PNG|SVG|ASCII|
+|---|---|---|---|
+|Sequence|✅️|✅|✅|
+|Usecase|✅|✅|❌|
+|Class|✅|✅|❌|
+|Object|✅|✅|❌|
+|Component|✅|✅|❌|
+|Deployment|✅|✅|❌|
+|State|✅|✅|❌|
+|Timing|✅|✅|❌|
+|JSON|✅|✅|❌
+|YAML|✅|✅|❌|
+|Network|✅|✅|❌|
+|Wireframe|✅|✅|❌|
+|Archimate|✅|✅|❌|
+|SDL|✅|✅|❌|
+|Ditaa|✅|❌|❌|
+|Gantt|✅|✅|❌|
+|MindMap|✅|✅|❌|
+|Word Breakdown|✅|✅|❌|
+|Math|✅|✅|❌|
+|ERP|✅|✅|❌|
+-->
 
 
 ## Examples

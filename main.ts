@@ -50,8 +50,29 @@ export default class PlantumlPlugin extends Plugin {
         return index;
     }
 
-    imageProcessor = async (source: string, el: HTMLElement, _: MarkdownPostProcessorContext): Promise<void> => {
+    svgProcessor = async (source: string, el: HTMLElement, _: MarkdownPostProcessorContext) : Promise<void> => {
+        //make sure url is defined. once the setting gets reset to default, an empty string will be returned by settings
+        let url = this.settings.server_url;
+        if (url.length == 0) {
+            url = DEFAULT_SETTINGS.server_url;
+        }
 
+        const imageUrlBase = url + "/svg/";
+
+        //replace all non breaking spaces with actual spaces
+        source = source.replace(/&nbsp;/gi, " ");
+
+        const encodedDiagram = plantuml.encode(this.settings.header + "\r\n" + source);
+
+        console.log("loading diagram from: " + imageUrlBase + encodedDiagram);
+        request({url: imageUrlBase + encodedDiagram, method: 'GET'}).then((value) => {
+           el.insertAdjacentHTML('beforeend', value);
+        }).catch((error) => {
+            console.error(error);
+        });
+    }
+
+    imageProcessor = async (source: string, el: HTMLElement, _: MarkdownPostProcessorContext): Promise<void> => {
         //make sure url is defined. once the setting gets reset to default, an empty string will be returned by settings
         let url = this.settings.server_url;
         if (url.length == 0) {
@@ -133,12 +154,13 @@ export default class PlantumlPlugin extends Plugin {
             this.asciiProcessor(source, el, ctx);
         }
 
-            this.registerMarkdownCodeBlockProcessor("plantuml", imageProcessorDebounce);
-            this.registerMarkdownCodeBlockProcessor("plantuml-ascii", asciiProcessorDebounce);
+        this.registerMarkdownCodeBlockProcessor("plantuml", imageProcessorDebounce);
+        this.registerMarkdownCodeBlockProcessor("plantuml-ascii", asciiProcessorDebounce);
+        this.registerMarkdownCodeBlockProcessor("plantuml-svg", this.svgProcessor);
 
-            //keep this processor for backwards compatibility
-            this.registerMarkdownCodeBlockProcessor("plantuml-map", imageProcessorDebounce);
-        }
+        //keep this processor for backwards compatibility
+        this.registerMarkdownCodeBlockProcessor("plantuml-map", imageProcessorDebounce);
+    }
 
     onunload(): void {
         console.log('unloading plugin plantuml');
