@@ -2,7 +2,7 @@
 
 Render [PlantUML](https://plantuml.com) Diagrams in [Obsidian](https://obsidian.md)
 
-![Demonstration](https://i.imgur.com/Ueyw0SE.gif)
+![Demonstration](https://i.joethei.space/c5CVp0aX6h.gif)
 
 This plugin uses the [PlantUML Online Server](https://plantuml.com/server) for rendering.
 
