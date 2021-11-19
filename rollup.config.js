@@ -11,7 +11,7 @@ https://github.com/joethei/obsidian-plantuml
 `;
 
 export default {
-  input: 'main.ts',
+  input: 'src/main.ts',
   output: {
     dir: '.',
     sourcemap: 'inline',
