@@ -19,7 +19,7 @@ export class Processors {
         const lines = text.split(/\r?\n/);
         const resultLines: string[] = [];
         for (let line of lines) {
-            resultLines.push(line.replace(/\s+/g, ' '));
+            resultLines.push(line.replace(/\s+$/g, ' '));
         }
         const result = resultLines.join('\r\n');
         console.log(result);
