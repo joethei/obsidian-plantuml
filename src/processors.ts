@@ -11,22 +11,25 @@ export class Processors {
     }
 
     /**
-     * replace all non breaking spaces with actual spaces
+     * replace all non-breaking spaces with actual spaces
      * @param text
      * @private
      */
     private replaceNonBreakingSpaces(text: string) {
         const lines = text.split(/\r?\n/);
         const resultLines: string[] = [];
-        for (let line of lines) {
-            resultLines.push(line.replace(/\s+/g, ' '));
+        if(text.startsWith("@startmindmap")) {
+            for (const line of lines) {
+                resultLines.push(line.replace(/\s+/g, ' '));
+            }
+        }else {
+            resultLines.push(...lines);
         }
         const result = resultLines.join('\r\n');
-        console.log(result);
         return result.replace(/&nbsp;/gi, " ");
     }
 
-    public svgProcessor (source: string, el: HTMLElement, _: MarkdownPostProcessorContext): void {
+    public svgProcessor = async (source: string, el: HTMLElement, _: MarkdownPostProcessorContext): Promise<void> => {
         //make sure url is defined. once the setting gets reset to default, an empty string will be returned by settings
         let url = this.plugin.settings.server_url;
         if (url.length == 0) {
@@ -40,8 +43,9 @@ export class Processors {
 
         request({url: imageUrlBase + encodedDiagram, method: 'GET'}).then((value: string) => {
             el.insertAdjacentHTML('beforeend', value);
-        }).catch((error: any) => {
-            console.error(error);
+        }).catch((error: Error) => {
+            if(error)
+                console.error(error);
         });
     }
 
@@ -55,7 +59,6 @@ export class Processors {
         const imageUrlBase = url + "/png/";
         source = this.replaceNonBreakingSpaces(source);
         const encodedDiagram = plantuml.encode(this.plugin.settings.header + "\r\n" + source);
-        console.log(encodedDiagram);
 
         const img = document.createElement("img");
         img.src = imageUrlBase + encodedDiagram;
@@ -69,8 +72,9 @@ export class Processors {
                 el.innerHTML = value;
                 el.children[0].setAttr("name", encodedDiagram);
             }
-        }).catch((error: any) => {
-            console.error(error);
+        }).catch((error: Error) => {
+            if(error)
+                console.error(error);
         }).finally(() => {
             el.appendChild(img);
         });

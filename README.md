@@ -121,14 +121,4 @@ results in:
 
 
 ## Installation
-
-### Inside Obsidian
-
 `Settings > Third-party plugins > Community Plugins > Browse` and search for `PlantUML`.
-
-### Manually installing the plugin
-
-- Clone this repo
-- `npm i` or `yarn` to install dependencies
-- `npm run build`  
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/obsidian-plantuml/`.

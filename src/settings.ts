@@ -10,7 +10,7 @@ export interface PlantUMLSettings {
 export const DEFAULT_SETTINGS: PlantUMLSettings = {
     server_url: 'https://www.plantuml.com/plantuml',
     header: '',
-    debounce: 10,
+    debounce: 3,
 }
 
 export class PlantUMLSettingsTab extends PluginSettingTab {
@@ -51,7 +51,7 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
                 }
             );
         new Setting(containerEl).setName("Debounce")
-            .setDesc("How often should the diagram refresh in seconds(currently not used due to flawed implementation)")
+            .setDesc("How often should the diagram refresh in seconds")
             .addText(text => text.setPlaceholder(String(DEFAULT_SETTINGS.debounce))
                 .setValue(String(this.plugin.settings.debounce))
                 .onChange(async (value) => {

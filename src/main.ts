@@ -1,39 +1,72 @@
 import {
+    debounce, Debouncer,
     MarkdownPostProcessorContext,
     Plugin
 } from 'obsidian';
-
-import * as plantuml from 'plantuml-encoder'
 import {DEFAULT_SETTINGS, PlantUMLSettings, PlantUMLSettingsTab} from "./settings";
 import {Processors} from "./processors";
+import { v4 as uuidv4 } from 'uuid';
 
 const SECONDS_TO_MS_FACTOR = 1000;
 
 export default class PlantumlPlugin extends Plugin {
     settings: PlantUMLSettings;
 
+    debounceMap = new Map<string, Debouncer<[string, HTMLElement, MarkdownPostProcessorContext]>>();
+
     async onload(): Promise<void> {
         console.log('loading plugin plantuml');
         await this.loadSettings();
         this.addSettingTab(new PlantUMLSettingsTab(this));
 
-        let processors = new Processors(this);
+        const processors = new Processors(this);
 
-        //let debounceTime = this.settings.debounce;
-        //console.log("debounce time set to " + debounceTime + " seconds");
-        //debounceTime = debounceTime * SECONDS_TO_MS_FACTOR;
+        let debounceTime = this.settings.debounce;
+        debounceTime = debounceTime * SECONDS_TO_MS_FACTOR;
 
-        //currently just redirecting to other method to disable debounce, as the first implementation was flawed.
         const imageProcessorDebounce = (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
-          processors.imageProcessor(source, el, ctx);
+            if(el.dataset.plantumlDebounce) {
+                const debounceId = el.dataset.plantumlDebounce;
+                if (this.debounceMap.has(debounceId)) {
+                    this.debounceMap.get(debounceId)(source, el, ctx);
+                }
+            }else {
+                const func = debounce(processors.imageProcessor, debounceTime, true);
+                const uuid = uuidv4();
+                el.dataset.plantumlDebouce = uuid;
+                this.debounceMap.set(uuid, func);
+                func(source, el, ctx);
+            }
         }
 
         const asciiProcessorDebounce = (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
-            processors.asciiProcessor(source, el, ctx);
+            if(el.dataset.plantumlDebounce) {
+                const debounceId = el.dataset.plantumlDebounce;
+                if (this.debounceMap.has(debounceId)) {
+                    this.debounceMap.get(debounceId)(source, el, ctx);
+                }
+            }else {
+                const func = debounce(processors.asciiProcessor, debounceTime, true);
+                const uuid = uuidv4();
+                el.dataset.plantumlDebouce = uuid;
+                this.debounceMap.set(uuid, func);
+                func(source, el, ctx);
+            }
         }
 
         const svgProcessorDebounce = (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
-            processors.svgProcessor(source, el, ctx);
+            if(el.dataset.plantumlDebounce) {
+                const debounceId = el.dataset.plantumlDebounce;
+                if (this.debounceMap.has(debounceId)) {
+                    this.debounceMap.get(debounceId)(source, el, ctx);
+                }
+            }else {
+                const func = debounce(processors.svgProcessor, debounceTime, true);
+                const uuid = uuidv4();
+                el.dataset.plantumlDebouce = uuid;
+                this.debounceMap.set(uuid, func);
+                func(source, el, ctx);
+            }
         }
 
         this.registerMarkdownCodeBlockProcessor("plantuml", imageProcessorDebounce);
