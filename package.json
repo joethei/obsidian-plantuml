@@ -17,6 +17,7 @@
     "@types/uuid": "^8.3.3",
     "@typescript-eslint/eslint-plugin": "^5.6.0",
     "@typescript-eslint/parser": "^5.6.0",
+    "builtin-modules": "^3.2.0",
     "esbuild": "^0.14.2",
     "eslint": "^7.22.0",
     "obsidian": "^0.12.7",
