@@ -5,12 +5,14 @@ export interface PlantUMLSettings {
     server_url: string,
     header: string;
     debounce: number;
+    localJar: string;
 }
 
 export const DEFAULT_SETTINGS: PlantUMLSettings = {
     server_url: 'https://www.plantuml.com/plantuml',
     header: '',
     debounce: 3,
+    localJar: '',
 }
 
 export class PlantUMLSettingsTab extends PluginSettingTab {
@@ -36,6 +38,22 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
                     }
                 )
             );
+
+        //@ts-ignore
+        if(this.plugin.app.plugins.plugins["local-plantuml"]) {
+            new Setting(containerEl)
+                .setName("Local JAR")
+                .setDesc("Path to local PlantUML Jar")
+                .addText(text => text.setPlaceholder(DEFAULT_SETTINGS.localJar)
+                    .setValue(this.plugin.settings.localJar)
+                    .onChange(async (value) => {
+                            this.plugin.settings.localJar = value;
+                            await this.plugin.saveSettings();
+                        }
+                    )
+                );
+        }
+
         new Setting(containerEl).setName("Header")
             .setDesc("Included at the head in every diagram. Useful for specifying a common theme (.puml file)")
             .addTextArea(text => {

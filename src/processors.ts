@@ -1,4 +1,4 @@
-import { MarkdownPostProcessorContext, request} from "obsidian";
+import {MarkdownPostProcessorContext, request} from "obsidian";
 import {DEFAULT_SETTINGS} from "./settings";
 import * as plantuml from "plantuml-encoder";
 import PlantumlPlugin from "./main";
@@ -8,6 +8,15 @@ export class Processors {
 
     constructor(plugin: PlantumlPlugin) {
         this.plugin = plugin;
+    }
+
+    private async localProcessor(source: string, type: string) : Promise<string> {
+        //@ts-ignore
+        if(this.plugin.app.plugins.plugins["local-plantuml"]) {
+            //@ts-ignore
+            return await this.plugin.app.plugins.plugins["local-plantuml"].generateImage(source, this.plugin.settings.localJar, type);
+        }
+        return "";
     }
 
     /**
@@ -38,8 +47,15 @@ export class Processors {
 
         const imageUrlBase = url + "/svg/";
         source = this.replaceNonBreakingSpaces(source);
+        source = this.plugin.settings.header + "\r\n" + source;
 
-        const encodedDiagram = plantuml.encode(this.plugin.settings.header + "\r\n" + source);
+        const local = await this.localProcessor(source, "svg");
+        if(local !== "") {
+            el.insertAdjacentHTML('beforeend', local);
+            return;
+        }
+
+        const encodedDiagram = plantuml.encode(source);
 
         request({url: imageUrlBase + encodedDiagram, method: 'GET'}).then((value: string) => {
             el.insertAdjacentHTML('beforeend', value);
@@ -58,7 +74,29 @@ export class Processors {
 
         const imageUrlBase = url + "/png/";
         source = this.replaceNonBreakingSpaces(source);
-        const encodedDiagram = plantuml.encode(this.plugin.settings.header + "\r\n" + source);
+        source = this.plugin.settings.header + "\r\n" + source;
+
+        const encodedDiagram = plantuml.encode(source);
+
+        const local = await this.localProcessor(source, "png");
+        if(local !== "") {
+            const img = document.createElement("img");
+            img.src = "data:image/png;base64," + local;
+            img.useMap = "#" + encodedDiagram;
+
+            //@ts-ignore
+            const map = await this.plugin.app.plugins.plugins["local-plantuml"].generateMap(source, this.plugin.settings.localJar);
+            console.log(map);
+            if(map.contains("map")) {
+                console.log("map");
+                el.innerHTML = map;
+                el.children[0].setAttr("name", encodedDiagram);
+            }
+
+            el.appendChild(img);
+
+            return;
+        }
 
         const img = document.createElement("img");
         img.src = imageUrlBase + encodedDiagram;
@@ -68,7 +106,7 @@ export class Processors {
         const mapUrlBase = url + "/map/";
         request({url: mapUrlBase + encodedDiagram, method: "GET"}).then((value: string) => {
             //only add the map content if actual text is returned(e.g. PicoWeb does not support this)
-            if (value.contains("<map>")) {
+            if (value.contains("map")) {
                 el.innerHTML = value;
                 el.children[0].setAttr("name", encodedDiagram);
             }
@@ -88,8 +126,19 @@ export class Processors {
         }
         const asciiUrlBase = url + "/txt/";
         source = this.replaceNonBreakingSpaces(source);
+        source = this.plugin.settings.header + "\r\n" + source;
 
-        const encodedDiagram = plantuml.encode(this.plugin.settings.header + "\r\n" + source);
+        const local = await this.localProcessor(source, "txt");
+        if(local !== "") {
+            const pre = document.createElement("pre");
+            const code = document.createElement("code");
+            pre.appendChild(code);
+            code.setText(local);
+            el.appendChild(pre);
+            return;
+        }
+
+        const encodedDiagram = plantuml.encode(source);
 
         const result = await request({url: asciiUrlBase + encodedDiagram});
 
@@ -107,13 +156,4 @@ export class Processors {
         code.setText(result);
         el.appendChild(pre);
     };
-
-    //taken from: https://stackoverflow.com/a/1144788/5589264
-    private escapeRegExp(string: string) : string {
-        return string.replace(/[.*+\-?^${}()|[\]\\]/g, '\\$&'); // $& means the whole matched string
-    }
-
-    private replaceAll(str: string, find: string, replace: string) : string {
-        return str.replace(new RegExp(this.escapeRegExp(find), 'g'), replace);
-    }
 }
