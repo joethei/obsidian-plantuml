@@ -1,4 +1,4 @@
-import {MarkdownPostProcessorContext, request} from "obsidian";
+import {MarkdownPostProcessorContext, Notice, request} from "obsidian";
 import {DEFAULT_SETTINGS} from "./settings";
 import * as plantuml from "plantuml-encoder";
 import PlantumlPlugin from "./main";
@@ -13,8 +13,14 @@ export class Processors {
     private async localProcessor(source: string, type: string) : Promise<string> {
         //@ts-ignore
         if(this.plugin.app.plugins.plugins["local-plantuml"]) {
-            //@ts-ignore
-            return await this.plugin.app.plugins.plugins["local-plantuml"].generateImage(source, this.plugin.settings.localJar, type);
+            try {
+                //@ts-ignore
+                return await this.plugin.app.plugins.plugins["local-plantuml"].generateImage(source, this.plugin.settings.localJar, type);
+            } catch(e: any) {
+                new Notice("An error orrcurred while rendering your PlantUML Diagram, please check the console for more information");
+                console.error(e);
+                return "error";
+            }
         }
         return "";
     }
@@ -86,7 +92,6 @@ export class Processors {
 
             //@ts-ignore
             const map = await this.plugin.app.plugins.plugins["local-plantuml"].generateMap(source, this.plugin.settings.localJar);
-            console.log(map);
             if(map.contains("map")) {
                 console.log("map");
                 el.innerHTML = map;
