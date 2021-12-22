@@ -18,8 +18,6 @@ You can also host your own server
 [JEE](https://plantuml.com/de/server) /
 [PicoWeb](https://plantuml.com/de/picoweb)) and specify its address in the settings.
 
-You can also render your diagrams locally by installing the desktop only [Local PlantUML Provider](https://github.com/joethei/obsidian-local-plantuml) plugin.
-
 ## Usage
 Create a fenced codeblock using `plantuml` as the language.
 Specify your plantuml code inside.

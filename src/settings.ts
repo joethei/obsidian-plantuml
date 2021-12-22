@@ -1,4 +1,4 @@
-import {Notice, PluginSettingTab, Setting} from "obsidian";
+import {Notice, Platform, PluginSettingTab, Setting} from "obsidian";
 import PlantumlPlugin from "./main";
 
 export interface PlantUMLSettings {
@@ -39,8 +39,7 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
                 )
             );
 
-        //@ts-ignore
-        if(this.plugin.app.plugins.plugins["local-plantuml"]) {
+        if(Platform.isDesktopApp) {
             new Setting(containerEl)
                 .setName("Local JAR")
                 .setDesc("Path to local PlantUML Jar")
