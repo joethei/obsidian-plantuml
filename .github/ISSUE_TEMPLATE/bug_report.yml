@@ -1,0 +1,55 @@
+name: Bug Report
+description: File a bug report
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Also tell us, what did you expect to happen?
+      placeholder: Tell us what you see!
+      value: "A bug happened!"
+    validations:
+      required: true
+  - type: input
+    id: version-obsidian
+    attributes:
+      label: Obsidian version
+      description: What version of Obsidian are you using?
+    validations:
+      required: true
+  - type: input
+    id: version-plugin
+    attributes:
+      label: Plugin version
+      description: What version of this plugin are you using?
+    validations:
+      required: true
+  - type: dropdown
+    id: browsers
+    attributes:
+      label: What distribution are you seeing the problem on?
+      multiple: true
+      options:
+        - Desktop
+        - Mobile
+  - type: dropdown
+    id: processor
+    attributes:
+      label: Are you using a local `.jar` or a remote server
+      multiple: false
+      options:
+        - local .jar
+        - server
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: |
+        Please copy and paste any relevant log output. This will be automatically formatted into code, so no need for backticks.
+        To check for errors, first open the developer tools by pressing Ctrl-Shift-I on Windows/Linux or Cmd-Opt-I on macOS, and then go to the "Console" tab. If you want to save the error to a log file, you can right click on the error and choose "Save as...".
+      render: shell

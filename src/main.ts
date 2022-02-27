@@ -1,87 +1,66 @@
 import {
-    debounce, Debouncer,
-    MarkdownPostProcessorContext, Platform,
+    addIcon, Platform,
     Plugin
 } from 'obsidian';
 import {DEFAULT_SETTINGS, PlantUMLSettings, PlantUMLSettingsTab} from "./settings";
-import {Processors} from "./processors";
-import { v4 as uuidv4 } from 'uuid';
 import {LocalProcessors} from "./localProcessors";
-
-const SECONDS_TO_MS_FACTOR = 1000;
+import {DebouncedProcessors} from "./debouncedProcessors";
+import {isUsingLivePreviewEnabledEditor, LOGO_SVG} from "./const";
+import {Processor} from "./processor";
+import {ServerProcessor} from "./serverProcessor";
+import {Replacer} from "./functions";
 
 export default class PlantumlPlugin extends Plugin {
     settings: PlantUMLSettings;
-    local: LocalProcessors;
 
-    debounceMap = new Map<string, Debouncer<[string, HTMLElement, MarkdownPostProcessorContext]>>();
+    serverProcessor: Processor;
+    localProcessor: Processor;
+    replacer: Replacer;
+
+    getProcessor() : Processor {
+        if(Platform.isMobileApp) {
+            return this.serverProcessor;
+        }
+        if(this.settings.localJar.length > 0) {
+            return this.localProcessor;
+        }
+        return this.serverProcessor;
+    }
 
     async onload(): Promise<void> {
         console.log('loading plugin plantuml');
         await this.loadSettings();
         this.addSettingTab(new PlantUMLSettingsTab(this));
+        this.replacer = new Replacer(this);
 
-        const processors = new Processors(this);
-
-        if(Platform.isDesktopApp) {
-            this.local = new LocalProcessors(this);
+        if(isUsingLivePreviewEnabledEditor()) {
+            const view = require("./PumlView");
+            addIcon("document-" + view.VIEW_TYPE, LOGO_SVG);
+            this.registerView(view.VIEW_TYPE, (leaf) => {
+                return new view.PumlView(leaf, this);
+            });
+            this.registerExtensions(["puml"], view.VIEW_TYPE);
         }
 
-        let debounceTime = this.settings.debounce;
-        debounceTime = debounceTime * SECONDS_TO_MS_FACTOR;
-
-        const imageProcessorDebounce = async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
-            if(el.dataset.plantumlDebounce) {
-                const debounceId = el.dataset.plantumlDebounce;
-                if (this.debounceMap.has(debounceId)) {
-                    this.debounceMap.get(debounceId)(source, el, ctx);
-                }
-            }else {
-                const func = debounce(processors.imageProcessor, debounceTime, true);
-                const uuid = uuidv4();
-                el.dataset.plantumlDebouce = uuid;
-                this.debounceMap.set(uuid, func);
-                await processors.imageProcessor(source, el, ctx);
-            }
+        this.serverProcessor = new ServerProcessor(this);
+        if (Platform.isDesktopApp) {
+            this.localProcessor = new LocalProcessors(this);
         }
 
-        const asciiProcessorDebounce = async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
-            if(el.dataset.plantumlDebounce) {
-                const debounceId = el.dataset.plantumlDebounce;
-                if (this.debounceMap.has(debounceId)) {
-                    this.debounceMap.get(debounceId)(source, el, ctx);
-                }
-            }else {
-                const func = debounce(processors.asciiProcessor, debounceTime, true);
-                const uuid = uuidv4();
-                el.dataset.plantumlDebouce = uuid;
-                this.debounceMap.set(uuid, func);
-                await processors.asciiProcessor(source, el, ctx);
-            }
-        }
+        const processor = new DebouncedProcessors(this);
 
-        const svgProcessorDebounce = async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
-            if(el.dataset.plantumlDebounce) {
-                const debounceId = el.dataset.plantumlDebounce;
-                if (this.debounceMap.has(debounceId)) {
-                    this.debounceMap.get(debounceId)(source, el, ctx);
-                }
-            }else {
-                const func = debounce(processors.svgProcessor, debounceTime, true);
-                const uuid = uuidv4();
-                el.dataset.plantumlDebouce = uuid;
-                this.debounceMap.set(uuid, func);
-                await processors.svgProcessor(source, el, ctx);
-            }
-        }
-
-        this.registerMarkdownCodeBlockProcessor("plantuml", imageProcessorDebounce);
-        this.registerMarkdownCodeBlockProcessor("plantuml-ascii", asciiProcessorDebounce);
-        this.registerMarkdownCodeBlockProcessor("plantuml-svg", svgProcessorDebounce);
+        this.registerMarkdownCodeBlockProcessor("plantuml", processor.png);
+        this.registerMarkdownCodeBlockProcessor("plantuml-ascii", processor.ascii);
+        this.registerMarkdownCodeBlockProcessor("plantuml-svg", processor.svg);
+        this.registerMarkdownCodeBlockProcessor("puml", processor.png);
+        this.registerMarkdownCodeBlockProcessor("puml-svg", processor.svg);
+        this.registerMarkdownCodeBlockProcessor("puml-ascii", processor.ascii);
 
         //keep this processor for backwards compatibility
-        this.registerMarkdownCodeBlockProcessor("plantuml-map", imageProcessorDebounce);
+        this.registerMarkdownCodeBlockProcessor("plantuml-map", processor.png);
+
     }
+
 
     async onunload(): Promise<void> {
         console.log('unloading plugin plantuml');

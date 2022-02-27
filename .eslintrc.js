@@ -8,5 +8,8 @@ module.exports = {
             2,
             { args: "all", argsIgnorePattern: "^_" },
         ],
+        "@typescript-eslint/no-explicit-any": "off",
+        "@typescript-eslint/ban-ts-comment": "off",
+        "@typescript-eslint/no-var-requires": "off"
     },
 };
