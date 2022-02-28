@@ -1,6 +1,6 @@
 {
   "name": "obsidian-plantuml",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "PlantUML rendering for Obsidian.md",
   "main": "main.js",
   "scripts": {
@@ -19,7 +19,7 @@
     "@typescript-eslint/eslint-plugin": "^5.6.0",
     "@typescript-eslint/parser": "^5.6.0",
     "builtin-modules": "^3.2.0",
-    "esbuild": "^0.14.2",
+    "esbuild": "0.14.2",
     "eslint": "^7.22.0",
     "node": "^17.2.0",
     "obsidian": "^0.13.21",
