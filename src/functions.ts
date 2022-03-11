@@ -33,9 +33,12 @@ export class Replacer {
      * @param path path of the current file
      */
     replaceLinks(text: string, path: string) : string {
-        return text.replace(/\[\[\[([\s\S]*)\]\]\]/g, ((_, args) => {
+        return text.replace(/\[\[\[([\s\S]*?)\]\]\]/g, ((_, args) => {
             const split = args.split("|");
             const file = this.plugin.app.metadataCache.getFirstLinkpathDest(split[0], path);
+            if(!file) {
+                return "File with name: " + split[0] + " not found";
+            }
             //@ts-ignore
             const url = this.plugin.app.getObsidianUrl(file);
             let alias = file.basename;
@@ -56,6 +59,12 @@ export class Replacer {
             return this.plugin.app.vault.adapter.getFullPath("");
         }
         const file = this.plugin.app.vault.getAbstractFileByPath(path);
+
+        if(!file) {
+            //@ts-ignore
+            return this.plugin.app.vault.adapter.getFullPath("");
+        }
+
         //@ts-ignore
         const folder = this.plugin.app.vault.getDirectParent(file);
         //@ts-ignore

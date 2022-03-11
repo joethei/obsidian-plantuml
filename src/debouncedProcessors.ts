@@ -38,7 +38,7 @@ export class DebouncedProcessors implements Processor{
         if (el.dataset.plantumlDebounce) {
             const debounceId = el.dataset.plantumlDebounce;
             if (this.debounceMap.has(debounceId)) {
-                this.debounceMap.get(debounceId)(source, el, ctx);
+                await this.debounceMap.get(debounceId)(source, el, ctx);
             }
         } else {
             const func = debounce(processor, this.debounceTime, true);

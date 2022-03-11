@@ -33,6 +33,13 @@ export default class PlantumlPlugin extends Plugin {
         this.addSettingTab(new PlantUMLSettingsTab(this));
         this.replacer = new Replacer(this);
 
+        this.serverProcessor = new ServerProcessor(this);
+        if (Platform.isDesktopApp) {
+            this.localProcessor = new LocalProcessors(this);
+        }
+
+        const processor = new DebouncedProcessors(this);
+
         if(isUsingLivePreviewEnabledEditor()) {
             const view = require("./PumlView");
             addIcon("document-" + view.VIEW_TYPE, LOGO_SVG);
@@ -41,13 +48,6 @@ export default class PlantumlPlugin extends Plugin {
             });
             this.registerExtensions(["puml"], view.VIEW_TYPE);
         }
-
-        this.serverProcessor = new ServerProcessor(this);
-        if (Platform.isDesktopApp) {
-            this.localProcessor = new LocalProcessors(this);
-        }
-
-        const processor = new DebouncedProcessors(this);
 
         this.registerMarkdownCodeBlockProcessor("plantuml", processor.png);
         this.registerMarkdownCodeBlockProcessor("plantuml-ascii", processor.ascii);

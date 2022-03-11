@@ -46,6 +46,15 @@ body:
         - local .jar
         - server
   - type: textarea
+    id: source
+    attributes:
+      label: What is the code for the diagram
+      description: ""
+      placeholder: ""
+      value: ""
+    validations:
+      required: false
+  - type: textarea
     id: logs
     attributes:
       label: Relevant log output
