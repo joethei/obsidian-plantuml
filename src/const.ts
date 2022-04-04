@@ -34,7 +34,13 @@ export function isUsingLivePreviewEnabledEditor() : boolean {
     if(config.legacyEditor) return false;
 
     //requireApiVersion() has been added with 0.13.23, so we need a different method to be sure
-    const version = navigator.userAgent.match(/obsidian([^ ]+)/).first().split("/")[1];
+    const userAgent = navigator.userAgent.match(/obsidian([^ ]+)/);
+
+    //we are on mobile, there is no legacy editor on mobile.
+    if (userAgent === null) {
+        return true;
+    }
+    const version = userAgent.first().split("/")[1];
     //live preview was added with 0.13, so there is no way that prior versions would support it.
     return compareVersions.compare(version, "0.13.0", ">=");
 }
