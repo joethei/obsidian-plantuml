@@ -28,3 +28,7 @@
 .internal-embed.file-embed[src$=".puml"] {
     display: none;
 }
+
+.internal-embed.file-embed[src$=".pu"] {
+    display: none;
+}
