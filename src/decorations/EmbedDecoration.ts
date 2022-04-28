@@ -35,7 +35,11 @@ class StatefulDecorationSet {
                 if(!file) return;
                 const fileContent = await this.plugin.app.vault.read(file);
                 const div = createDiv();
-                await this.plugin.getProcessor().png(fileContent, div, null);
+                if(this.plugin.settings.defaultProcessor === "png") {
+                    await this.plugin.getProcessor().png(fileContent, div, null);
+                }else {
+                    await this.plugin.getProcessor().svg(fileContent, div, null);
+                }
                 deco = this.decoCache[token.value] = Decoration.replace({widget: new EmojiWidget(div), block: true});
             }
             decorations.push(deco.range(token.from, token.from));
@@ -133,7 +137,7 @@ class EmojiWidget extends WidgetType {
 
     constructor(source: HTMLDivElement) {
         super();
-        this.source = source.cloneNode(true) as HTMLDivElement;
+        this.source = source;
     }
 
     eq(other: EmojiWidget) {
