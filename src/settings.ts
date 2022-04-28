@@ -6,6 +6,7 @@ export interface PlantUMLSettings {
     header: string;
     debounce: number;
     localJar: string;
+    defaultProcessor: string;
 }
 
 export const DEFAULT_SETTINGS: PlantUMLSettings = {
@@ -13,6 +14,7 @@ export const DEFAULT_SETTINGS: PlantUMLSettings = {
     header: '',
     debounce: 3,
     localJar: '',
+    defaultProcessor: "png",
 }
 
 export class PlantUMLSettingsTab extends PluginSettingTab {
@@ -52,6 +54,19 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
                     )
                 );
         }
+
+        new Setting(containerEl)
+            .setName("Default processor for includes")
+            .setDesc("Any .pu/.puml files linked will use this processor")
+            .addDropdown(dropdown => {
+               dropdown
+                   .addOption("png", "PNG")
+                   .addOption("svg", "SVG")
+                   .onChange(async(value) => {
+                      this.plugin.settings.defaultProcessor = value;
+                      await this.plugin.saveSettings();
+                   });
+            });
 
         new Setting(containerEl).setName("Header")
             .setDesc("Included at the head in every diagram. Useful for specifying a common theme (.puml file)")

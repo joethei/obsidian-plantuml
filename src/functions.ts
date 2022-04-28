@@ -31,21 +31,25 @@ export class Replacer {
      * replace all links in the plugin syntax with valid plantuml links to note inside the vault
      * @param text the text, in which to replace all links
      * @param path path of the current file
+     * @param filetype
      */
-    replaceLinks(text: string, path: string) : string {
+    replaceLinks(text: string, path: string, filetype: string) : string {
         return text.replace(/\[\[\[([\s\S]*?)\]\]\]/g, ((_, args) => {
             const split = args.split("|");
             const file = this.plugin.app.metadataCache.getFirstLinkpathDest(split[0], path);
             if(!file) {
                 return "File with name: " + split[0] + " not found";
             }
-            //@ts-ignore
-            const url = this.plugin.app.getObsidianUrl(file);
             let alias = file.basename;
-            if (split[1]) {
-                alias = split[1];
+            if(filetype === "png") {
+                //@ts-ignore
+                const url = this.plugin.app.getObsidianUrl(file);
+                if (split[1]) {
+                    alias = split[1];
+                }
+                return "[[" + url + " " + alias + "]]";
             }
-            return "[[" + url + " " + alias + "]]";
+            return "[[" + file.basename + "]]";
         }));
     }
 
@@ -78,7 +82,6 @@ export class Replacer {
 }
 
 export function insertImageWithMap(el: HTMLElement, image: string, map: string, encodedDiagram: string) {
-
     el.empty();
 
     const img = document.createElement("img");
@@ -98,7 +101,6 @@ export function insertImageWithMap(el: HTMLElement, image: string, map: string, 
 }
 
 export function insertAsciiImage(el: HTMLElement, image: string) {
-
     el.empty();
 
     const pre = document.createElement("pre");
@@ -109,8 +111,18 @@ export function insertAsciiImage(el: HTMLElement, image: string) {
 }
 
 export function insertSvgImage(el: HTMLElement, image: string) {
-
     el.empty();
 
-    el.insertAdjacentHTML('beforeend', image);
+    const parser = new DOMParser();
+    const svg = parser.parseFromString(image, "image/svg+xml");
+
+    const links = svg.getElementsByTagName("a");
+    for (let i = 0; i < links.length; i++) {
+        const link = links[i];
+        link.addClass("internal-link");
+    }
+
+    el.insertAdjacentHTML('beforeend', svg.documentElement.outerHTML);
+
+
 }

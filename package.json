@@ -1,6 +1,6 @@
 {
   "name": "obsidian-plantuml",
-  "version": "1.5.3",
+  "version": "1.6.0",
   "description": "PlantUML rendering for Obsidian.md",
   "main": "main.js",
   "scripts": {
@@ -32,6 +32,7 @@
     "@codemirror/search": "^0.19.8",
     "@codemirror/view": "^0.19.44",
     "@codemirror/commands": "^0.19.8",
-    "@codemirror/history": "^0.19.2"
+    "@codemirror/history": "^0.19.2",
+    "@codemirror/stream-parser": "https://github.com/lishid/stream-parser"
   }
 }

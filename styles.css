@@ -24,3 +24,7 @@
 .puml-loading {
     color: var(--text-accent);
 }
+
+.internal-embed.file-embed[src$=".puml"] {
+    display: none;
+}
