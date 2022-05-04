@@ -1,4 +1,4 @@
-.settings_area {
+.puml-settings-area {
     margin-left: 5px;
     margin-right: 5px;
     font-size: 14px;
@@ -31,4 +31,8 @@
 
 .internal-embed.file-embed[src$=".pu"] {
     display: none;
+}
+
+.puml-error {
+    color: var(--text-error);
 }

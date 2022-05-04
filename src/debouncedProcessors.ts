@@ -16,7 +16,6 @@ export class DebouncedProcessors implements Processor {
         this.plugin = plugin;
         const debounceTime = plugin.settings.debounce;
         this.debounceTime = debounceTime * this.SECONDS_TO_MS_FACTOR;
-
     }
 
     png = async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {

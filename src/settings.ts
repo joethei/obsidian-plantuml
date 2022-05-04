@@ -6,6 +6,7 @@ export interface PlantUMLSettings {
     header: string;
     debounce: number;
     localJar: string;
+    javaPath: string;
     defaultProcessor: string;
 }
 
@@ -14,6 +15,7 @@ export const DEFAULT_SETTINGS: PlantUMLSettings = {
     header: '',
     debounce: 3,
     localJar: '',
+    javaPath: 'java',
     defaultProcessor: "png",
 }
 
@@ -53,6 +55,18 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
                         }
                     )
                 );
+
+            new Setting(containerEl)
+                .setName("Java Path")
+                .setDesc("Path to Java executable")
+                .addText(text => text.setPlaceholder(DEFAULT_SETTINGS.javaPath)
+                    .setValue(this.plugin.settings.javaPath)
+                    .onChange(async (value) => {
+                            this.plugin.settings.javaPath = value;
+                            await this.plugin.saveSettings();
+                        }
+                    )
+                );
         }
 
         new Setting(containerEl)
@@ -62,6 +76,7 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
                dropdown
                    .addOption("png", "PNG")
                    .addOption("svg", "SVG")
+                   .setValue(this.plugin.settings.defaultProcessor)
                    .onChange(async(value) => {
                       this.plugin.settings.defaultProcessor = value;
                       await this.plugin.saveSettings();
@@ -79,7 +94,7 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
                             }
                         )
                     text.inputEl.setAttr("rows", 4);
-                    text.inputEl.addClass("settings_area")
+                    text.inputEl.addClass("puml-settings-area")
                 }
             );
         new Setting(containerEl).setName("Debounce")

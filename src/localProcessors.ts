@@ -42,7 +42,7 @@ export class LocalProcessors implements Processor {
             '-charset utf-8',
             '-pipemap'
         ];
-        const child = exec('java ' + args.join(" "), {encoding: 'binary', cwd: path});
+        const child = exec(this.plugin.settings.javaPath + ' ' + args.join(" "), {encoding: 'binary', cwd: path});
 
         let stdout = "";
 
@@ -88,9 +88,9 @@ export class LocalProcessors implements Processor {
 
         let child: typeof ChildProcess;
         if (type === OutputType.PNG) {
-            child = exec('java ' + args.join(" "), {encoding: 'binary', cwd: path});
+            child = exec(this.plugin.settings.javaPath + ' ' + args.join(" "), {encoding: 'binary', cwd: path});
         } else {
-            child = exec('java ' + args.join(" "), {encoding: 'utf-8', cwd: path});
+            child = exec(this.plugin.settings.javaPath + ' ' + args.join(" "), {encoding: 'utf-8', cwd: path});
         }
 
         let stdout: any;
