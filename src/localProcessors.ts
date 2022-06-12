@@ -33,7 +33,7 @@ export class LocalProcessors implements Processor {
 
     async generateLocalMap(source: string, path: string): Promise<string> {
         const {exec} = require('child_process');
-        const args = this.resolveLocalJarCmd(path).concat(['-pipemap']);
+        const args = this.resolveLocalJarCmd().concat(['-pipemap']);
         const child = exec(args.join(" "), {encoding: 'binary', cwd: path});
 
         let stdout = "";
@@ -66,7 +66,7 @@ export class LocalProcessors implements Processor {
 
     async generateLocalImage(source: string, type: OutputType, path: string): Promise<string> {
         const {ChildProcess, exec} = require('child_process');
-        const args = this.resolveLocalJarCmd(path).concat(['-t' + type, '-pipe']);
+        const args = this.resolveLocalJarCmd().concat(['-t' + type, '-pipe']);
 
         let child: typeof ChildProcess;
         if (type === OutputType.PNG) {
@@ -128,28 +128,29 @@ export class LocalProcessors implements Processor {
      * To support local jar settings with unix-like style, and search local jar file
      * from current vault path.
      */
-    private resolveLocalJarCmd(path: string): string[] {
+    private resolveLocalJarCmd(): string[] {
         const jarFromSettings = this.plugin.settings.localJar;
         const {isAbsolute, resolve} = require('path');
         const {userInfo} = require('os');
         let jarFullPath: string;
+        const path = this.plugin.replacer.getFullPath("");
 
         if (jarFromSettings[0] === '~') {
             // As a workaround, I'm not sure what would isAbsolute() return with unix-like path
-            jarFullPath = userInfo().homedir + jarFromSettings.slice(1)
+            jarFullPath = userInfo().homedir + jarFromSettings.slice(1);
         }
         else {
             if (isAbsolute(jarFromSettings)) {
-                jarFullPath = jarFromSettings
+                jarFullPath = jarFromSettings;
             }
             else {
                 // the default search path is current vault
-                jarFullPath = resolve(path, jarFromSettings)
+                jarFullPath = resolve(path, jarFromSettings);
             }
         }
 
         if (jarFullPath.length == 0) {
-            throw Error('Invalid local jar file')
+            throw Error('Invalid local jar file');
         }
 
         return [

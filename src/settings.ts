@@ -44,9 +44,18 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
             );
 
         if(Platform.isDesktopApp) {
+
+            const jarDesc = new DocumentFragment();
+            jarDesc.createDiv().innerHTML = "Path to local JAR<br>Supports:" +
+                "<ul>" +
+                "<li>Absolute path</li>" +
+                "<li>Path relative to vault</li>" +
+                "<li>Path relative to users home directory <code>~/</code></li>" +
+                "</ul>";
+
             new Setting(containerEl)
                 .setName("Local JAR")
-                .setDesc("Path to local PlantUML Jar")
+                .setDesc(jarDesc)
                 .addText(text => text.setPlaceholder(DEFAULT_SETTINGS.localJar)
                     .setValue(this.plugin.settings.localJar)
                     .onChange(async (value) => {

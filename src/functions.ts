@@ -13,7 +13,7 @@ export class Replacer {
         this.plugin = plugin;
     }
 
-    replaceNonBreakingSpaces(text: string): string {
+    public replaceNonBreakingSpaces(text: string): string {
         const lines = text.split(/\r?\n/);
         const resultLines: string[] = [];
         if (text.startsWith("@startmindmap")) {
@@ -33,7 +33,7 @@ export class Replacer {
      * @param path path of the current file
      * @param filetype
      */
-    replaceLinks(text: string, path: string, filetype: string) : string {
+    public replaceLinks(text: string, path: string, filetype: string) : string {
         return text.replace(/\[\[\[([\s\S]*?)\]\]\]/g, ((_, args) => {
             const split = args.split("|");
             const file = this.plugin.app.metadataCache.getFirstLinkpathDest(split[0], path);
@@ -57,7 +57,7 @@ export class Replacer {
      * get the absolute path on the users computer
      * @param path vault local path
      */
-    private getFullPath(path: string) {
+    public getFullPath(path: string) {
         if (path.length === 0) {
             //@ts-ignore
             return this.plugin.app.vault.adapter.getFullPath("");
@@ -75,7 +75,7 @@ export class Replacer {
         return this.plugin.app.vault.adapter.getFullPath(folder.path);
     }
 
-    getPath(ctx: MarkdownPostProcessorContext) {
+    public getPath(ctx: MarkdownPostProcessorContext) {
         return this.getFullPath(ctx ? ctx.sourcePath : '');
     }
 

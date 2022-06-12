@@ -1,6 +1,5 @@
 # Obsidian PlantUML
 
-![GitHub package.json version](https://img.shields.io/github/package-json/v/joethei/obsidian-plantuml)
 ![Maintenance](https://shields.joethei.xyz:/maintenance/yes/2022)
 ![GitHub manifest.json dynamic (path)](https://img.shields.io/github/manifest-json/minAppVersion/joethei/obsidian-plantuml?label=lowest%20supported%20app%20version)
 [![libera manifesto](https://img.shields.io/badge/libera-manifesto-lightgrey.svg)](https://liberamanifesto.com)
@@ -112,7 +111,7 @@ results in:
 
 ## Known issues
 Not all methods of using PlantUML support all different diagrams.
-Following are a few know issues.
+Following are a few known issues.
 - ASCII can only ever generate Sequence diagrams
 - The PicoWeb server does not support clickable links in png diagrams
 - Some languages like chinese are not rendered correctly -> Switch to SVG rendering
