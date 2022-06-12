@@ -32,17 +32,9 @@ export class LocalProcessors implements Processor {
     }
 
     async generateLocalMap(source: string, path: string): Promise<string> {
-        const resolve = require('path').resolve;
         const {exec} = require('child_process');
-        const jar = resolve(__dirname, this.plugin.settings.localJar);
-        const args = [
-            '-jar',
-            '-Djava.awt.headless=true',
-            jar,
-            '-charset utf-8',
-            '-pipemap'
-        ];
-        const child = exec(this.plugin.settings.javaPath + ' ' + args.join(" "), {encoding: 'binary', cwd: path});
+        const args = this.resolveLocalJarCmd(path).concat(['-pipemap']);
+        const child = exec(args.join(" "), {encoding: 'binary', cwd: path});
 
         let stdout = "";
 
@@ -73,24 +65,14 @@ export class LocalProcessors implements Processor {
     }
 
     async generateLocalImage(source: string, type: OutputType, path: string): Promise<string> {
-        const resolve = require('path').resolve;
         const {ChildProcess, exec} = require('child_process');
-
-        const jar = resolve(__dirname, this.plugin.settings.localJar);
-        const args = [
-            '-jar',
-            '-Djava.awt.headless=true',
-            jar,
-            '-t' + type,
-            '-charset utf-8',
-            '-pipe'
-        ];
+        const args = this.resolveLocalJarCmd(path).concat(['-t' + type, '-pipe']);
 
         let child: typeof ChildProcess;
         if (type === OutputType.PNG) {
-            child = exec(this.plugin.settings.javaPath + ' ' + args.join(" "), {encoding: 'binary', cwd: path});
+            child = exec(args.join(" "), {encoding: 'binary', cwd: path});
         } else {
-            child = exec(this.plugin.settings.javaPath + ' ' + args.join(" "), {encoding: 'utf-8', cwd: path});
+            child = exec(args.join(" "), {encoding: 'utf-8', cwd: path});
         }
 
         let stdout: any;
@@ -140,5 +122,38 @@ export class LocalProcessors implements Processor {
             child.stdin.write(source, "utf-8");
             child.stdin.end();
         });
+    }
+
+    /**
+     * To support local jar settings with unix-like style, and search local jar file
+     * from current vault path.
+     */
+    private resolveLocalJarCmd(path: string): string[] {
+        const jarFromSettings = this.plugin.settings.localJar;
+        const {isAbsolute, resolve} = require('path');
+        const {userInfo} = require('os');
+        let jarFullPath: string;
+
+        if (jarFromSettings[0] === '~') {
+            // As a workaround, I'm not sure what would isAbsolute() return with unix-like path
+            jarFullPath = userInfo().homedir + jarFromSettings.slice(1)
+        }
+        else {
+            if (isAbsolute(jarFromSettings)) {
+                jarFullPath = jarFromSettings
+            }
+            else {
+                // the default search path is current vault
+                jarFullPath = resolve(path, jarFromSettings)
+            }
+        }
+
+        if (jarFullPath.length == 0) {
+            throw Error('Invalid local jar file')
+        }
+
+        return [
+            this.plugin.settings.javaPath, '-jar', '-Djava.awt.headless=true', jarFullPath, '-charset', 'utf-8'
+        ];
     }
 }
