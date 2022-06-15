@@ -154,7 +154,7 @@ export class LocalProcessors implements Processor {
         }
 
         return [
-            this.plugin.settings.javaPath, '-jar', '-Djava.awt.headless=true', jarFullPath, '-charset', 'utf-8'
+            this.plugin.settings.javaPath, '-jar', '-Djava.awt.headless=true', '"' + jarFullPath + '"', '-charset', 'utf-8'
         ];
     }
 }
