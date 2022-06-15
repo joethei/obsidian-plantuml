@@ -1,11 +1,16 @@
 import {debounce, Debouncer, Keymap, setIcon, TextFileView, ViewStateResult, WorkspaceLeaf} from "obsidian";
 import PlantumlPlugin from "./main";
-import {drawSelection, EditorView, highlightActiveLine, keymap} from "@codemirror/view";
+import {
+    drawSelection,
+    EditorView,
+    highlightActiveLine,
+    highlightActiveLineGutter,
+    keymap,
+    lineNumbers
+} from "@codemirror/view";
 import {Annotation, EditorState, Extension, Transaction} from "@codemirror/state";
-import {highlightActiveLineGutter, lineNumbers} from "@codemirror/gutter";
 import {highlightSelectionMatches, search} from "@codemirror/search";
-import {history} from "@codemirror/history";
-import {defaultKeymap, indentWithTab} from "@codemirror/commands";
+import {defaultKeymap, history, indentWithTab} from "@codemirror/commands";
 
 export const VIEW_TYPE = "plantuml";
 
@@ -49,10 +54,10 @@ export class PumlView extends TextFileView {
         keymap.of([...defaultKeymap, indentWithTab]),
         history(),
         search(),
-        EditorView.updateListener.of(v => {
+        EditorView.updateListener.of(async v => {
             if(v.docChanged) {
                 this.requestSave();
-                this.renderPreview();
+                await this.renderPreview();
             }
         })
     ]

@@ -2,9 +2,9 @@ import {debounce} from "obsidian";
 import {EditorView, Decoration, DecorationSet, ViewUpdate, ViewPlugin, WidgetType} from "@codemirror/view";
 import {StateField, StateEffect, StateEffectType} from "@codemirror/state";
 import {Range} from "@codemirror/rangeset";
-import {syntaxTree} from "@codemirror/language";
-import {tokenClassNodeProp} from "@codemirror/stream-parser";
+import {syntaxTree, tokenClassNodeProp} from "@codemirror/language";
 import PlantumlPlugin from "../main";
+import {SyntaxNodeRef} from "@lezer/common";
 
 //based on: https://gist.github.com/nothingislost/faa89aa723254883d37f45fd16162337
 
@@ -76,13 +76,11 @@ function buildViewPlugin(plugin: PlantumlPlugin) {
 
             buildAsyncDecorations(view: EditorView) {
                 const targetElements: TokenSpec[] = [];
-                for (const {from, to} of view.visibleRanges) {
+                for (const {from} of view.visibleRanges) {
                     const tree = syntaxTree(view.state);
                     tree.iterate({
-                        from,
-                        to,
-                        enter: (type, from, to) => {
-                            const tokenProps = type.prop(tokenClassNodeProp);
+                        enter: (node: SyntaxNodeRef) => {
+                            const tokenProps = node.type.prop<string>(tokenClassNodeProp);
                             if (tokenProps) {
                                 const props = new Set(tokenProps.split(" "));
                                 const isEmbed = props.has("formatting-embed");

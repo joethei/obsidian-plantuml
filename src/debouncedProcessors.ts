@@ -44,6 +44,7 @@ export class DebouncedProcessors implements Processor {
             const uuid = uuidv4();
             el.dataset.plantumlDebouce = uuid;
             this.debounceMap.set(uuid, func);
+
             source = this.plugin.replacer.replaceNonBreakingSpaces(source);
             source = this.plugin.replacer.replaceLinks(source, this.plugin.replacer.getPath(ctx), filetype);
             source = this.plugin.settings.header + "\r\n" + source;

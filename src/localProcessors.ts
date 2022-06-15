@@ -20,13 +20,31 @@ export class LocalProcessors implements Processor {
 
     png = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
         const encodedDiagram = plantuml.encode(source);
+
+        if(localStorage.getItem(encodedDiagram + "-png")) {
+            const image = localStorage.getItem(encodedDiagram + "-png");
+            const map = localStorage.getItem(encodedDiagram + "-map");
+            insertImageWithMap(el,image, map, encodedDiagram);
+            return;
+        }
+
         const path = this.plugin.replacer.getPath(ctx);
         const image = await this.generateLocalImage(source, OutputType.PNG, path);
         const map = await this.generateLocalMap(source, path);
+
+        localStorage.setItem(encodedDiagram + "-png", image);
+        localStorage.setItem(encodedDiagram + "-map", map);
+
         insertImageWithMap(el, image, map, encodedDiagram);
     }
 
     svg = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+        const encodedDiagram = plantuml.encode(source);
+        if(localStorage.getItem(encodedDiagram + "-svg")) {
+            insertSvgImage(el, localStorage.getItem(encodedDiagram + "-svg"));
+            return;
+        }
+
         const image = await this.generateLocalImage(source, OutputType.SVG, this.plugin.replacer.getPath(ctx));
         insertSvgImage(el, image);
     }
@@ -98,6 +116,9 @@ export class LocalProcessors implements Processor {
             child.on("error", reject);
 
             child.on("close", (code: any) => {
+                if(stdout === undefined) {
+                    return;
+                }
                 if (code === 0) {
                     if (type === OutputType.PNG) {
                         const buf = new Buffer(stdout, 'binary');
@@ -107,7 +128,7 @@ export class LocalProcessors implements Processor {
                     resolve(stdout);
                     return;
                 } else if (code === 1) {
-                    console.log(stdout);
+                    console.error(stdout);
                     reject(new Error(stderr));
                 } else {
                     if (type === OutputType.PNG) {
