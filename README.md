@@ -1,4 +1,4 @@
-# Obsidian PlantUML
+# PlantUML Support for Obsidian
 
 ![Maintenance](https://shields.joethei.xyz:/maintenance/yes/2022)
 ![GitHub manifest.json dynamic (path)](https://img.shields.io/github/manifest-json/minAppVersion/joethei/obsidian-plantuml?label=lowest%20supported%20app%20version)
