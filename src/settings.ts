@@ -7,6 +7,7 @@ export interface PlantUMLSettings {
     debounce: number;
     localJar: string;
     javaPath: string;
+    dotPath: string;
     defaultProcessor: string;
 }
 
@@ -16,6 +17,7 @@ export const DEFAULT_SETTINGS: PlantUMLSettings = {
     debounce: 3,
     localJar: '',
     javaPath: 'java',
+    dotPath: 'dot',
     defaultProcessor: "png",
 }
 
@@ -72,6 +74,18 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
                     .setValue(this.plugin.settings.javaPath)
                     .onChange(async (value) => {
                             this.plugin.settings.javaPath = value;
+                            await this.plugin.saveSettings();
+                        }
+                    )
+                );
+
+            new Setting(containerEl)
+                .setName("Dot Path")
+                .setDesc("Path to dot executable")
+                .addText(text => text.setPlaceholder(DEFAULT_SETTINGS.dotPath)
+                    .setValue(this.plugin.settings.dotPath)
+                    .onChange(async (value) => {
+                            this.plugin.settings.dotPath = value;
                             await this.plugin.saveSettings();
                         }
                     )
