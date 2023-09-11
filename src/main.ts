@@ -1,5 +1,5 @@
 import {
-    addIcon, EventRef, Platform,
+    addIcon, Platform,
     Plugin, TFile
 } from 'obsidian';
 import {DEFAULT_SETTINGS, PlantUMLSettings, PlantUMLSettingsTab} from "./settings";
