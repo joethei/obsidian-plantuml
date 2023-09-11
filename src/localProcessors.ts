@@ -1,9 +1,10 @@
 import PlantumlPlugin from "./main";
 import {Processor} from "./processor";
-import {MarkdownPostProcessorContext} from "obsidian";
+import {MarkdownPostProcessorContext, moment} from "obsidian";
 import * as plantuml from "plantuml-encoder";
 import {insertAsciiImage, insertImageWithMap, insertSvgImage} from "./functions";
 import {OutputType} from "./const";
+import * as localforage from "localforage";
 
 export class LocalProcessors implements Processor {
 
@@ -14,17 +15,27 @@ export class LocalProcessors implements Processor {
     }
 
     ascii = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+        const encodedDiagram = plantuml.encode(source);
+        const item: string = await localforage.getItem('ascii-' + encodedDiagram);
+        if(item) {
+            insertAsciiImage(el, item);
+            await localforage.setItem('ts-' + encodedDiagram, Date.now());
+            return;
+        }
+
         const image = await this.generateLocalImage(source, OutputType.ASCII, this.plugin.replacer.getPath(ctx));
         insertAsciiImage(el, image);
+        await localforage.setItem('ascii-' + encodedDiagram, image);
+        await localforage.setItem('ts-' + encodedDiagram, Date.now());
     }
 
     png = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
         const encodedDiagram = plantuml.encode(source);
-
-        if(localStorage.getItem(encodedDiagram + "-png")) {
-            const image = localStorage.getItem(encodedDiagram + "-png");
-            const map = localStorage.getItem(encodedDiagram + "-map");
-            insertImageWithMap(el,image, map, encodedDiagram);
+        const item: string = await localforage.getItem('png-' + encodedDiagram);
+        if(item) {
+            const map: string = await localforage.getItem('map-' + encodedDiagram);
+            insertImageWithMap(el, item , map, encodedDiagram);
+            await localforage.setItem('ts-' + encodedDiagram, Date.now());
             return;
         }
 
@@ -32,20 +43,24 @@ export class LocalProcessors implements Processor {
         const image = await this.generateLocalImage(source, OutputType.PNG, path);
         const map = await this.generateLocalMap(source, path);
 
-        localStorage.setItem(encodedDiagram + "-png", image);
-        localStorage.setItem(encodedDiagram + "-map", map);
+        await localforage.setItem('png-' + encodedDiagram, image);
+        await localforage.setItem('map-' + encodedDiagram, map);
+        await localforage.setItem('ts-'+ encodedDiagram, Date.now());
 
         insertImageWithMap(el, image, map, encodedDiagram);
     }
 
     svg = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
         const encodedDiagram = plantuml.encode(source);
-        if(localStorage.getItem(encodedDiagram + "-svg")) {
-            insertSvgImage(el, localStorage.getItem(encodedDiagram + "-svg"));
+        const item: string = await localforage.getItem('svg-' + encodedDiagram);
+        if(item) {
+            insertSvgImage(el, item);
+            await localforage.setItem('ts-' + encodedDiagram, Date.now());
             return;
         }
-
         const image = await this.generateLocalImage(source, OutputType.SVG, this.plugin.replacer.getPath(ctx));
+        await localforage.setItem('svg-' + encodedDiagram, image);
+        await localforage.setItem('ts-' + encodedDiagram, Date.now());
         insertSvgImage(el, image);
     }
 

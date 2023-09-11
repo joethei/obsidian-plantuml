@@ -12,6 +12,7 @@ import {Replacer} from "./functions";
 import {VIEW_TYPE} from "./PumlView";
 import {Prec} from "@codemirror/state";
 import {asyncDecoBuilderExt} from "./decorations/EmbedDecoration";
+import localforage from "localforage";
 
 declare module "obsidian" {
     interface Workspace {
@@ -82,6 +83,13 @@ export default class PlantumlPlugin extends Plugin {
 
         //keep this processor for backwards compatibility
         this.registerMarkdownCodeBlockProcessor("plantuml-map", processor.png);
+
+        this.cleanupLocalStorage();
+        localforage.config({
+            name: 'puml',
+            description: 'PlantUML plugin'
+        });
+        await this.cleanupCache();
 
 
         //internal links
@@ -168,6 +176,31 @@ export default class PlantumlPlugin extends Plugin {
         });
     }
 
+    async cleanupCache() {
+        await localforage.iterate((value, key) => {
+            if(key.startsWith('ts-')) {
+                const encoded = key.split('-')[1];
+                if(value < new Date().getTime() - (this.settings.cache * 24 * 60 * 60 * 1000)) {
+                    localforage.removeItem('png-' + encoded);
+                    localforage.removeItem('svg-' + encoded);
+                    localforage.removeItem('map-' + encoded);
+                    localforage.removeItem('ascii-' + encoded);
+                }
+            }
+        });
+    }
+
+    /*
+     * older versions used to store generated images in local storage when using local generation.
+     * To fix issues with the local storage quota we have to clean this up when upgrading from a version that supported this.
+     */
+    cleanupLocalStorage() {
+        for (const key of Object.keys(localStorage)) {
+            if(key.endsWith('-map') || key.endsWith('-png') || key.endsWith('-svg') || key.endsWith('ascii')) {
+                localStorage.removeItem(key);
+            }
+        }
+    }
 
     async onunload(): Promise<void> {
         console.log('unloading plugin plantuml');

@@ -31,6 +31,7 @@
     "@codemirror/search": "6.0.0",
     "@codemirror/view": "6.0.0",
     "@codemirror/commands": "6.0.0",
-    "@codemirror/language": "https://github.com/lishid/cm-language"
+    "@codemirror/language": "https://github.com/lishid/cm-language",
+    "localforage": "1.10.0"
   }
 }

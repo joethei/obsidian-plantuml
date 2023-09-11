@@ -9,6 +9,7 @@ export interface PlantUMLSettings {
     javaPath: string;
     dotPath: string;
     defaultProcessor: string;
+    cache: number;
 }
 
 export const DEFAULT_SETTINGS: PlantUMLSettings = {
@@ -19,6 +20,7 @@ export const DEFAULT_SETTINGS: PlantUMLSettings = {
     javaPath: 'java',
     dotPath: 'dot',
     defaultProcessor: "png",
+    cache: 60,
 }
 
 export class PlantUMLSettingsTab extends PluginSettingTab {
@@ -68,7 +70,7 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
                 );
 
             new Setting(containerEl)
-                .setName("Java Path")
+                .setName("Java path")
                 .setDesc("Path to Java executable")
                 .addText(text => text.setPlaceholder(DEFAULT_SETTINGS.javaPath)
                     .setValue(this.plugin.settings.javaPath)
@@ -80,7 +82,7 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
                 );
 
             new Setting(containerEl)
-                .setName("Dot Path")
+                .setName("Dot path")
                 .setDesc("Path to dot executable")
                 .addText(text => text.setPlaceholder(DEFAULT_SETTINGS.dotPath)
                     .setValue(this.plugin.settings.dotPath)
@@ -120,7 +122,23 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
                     text.inputEl.addClass("puml-settings-area")
                 }
             );
-        new Setting(containerEl).setName("Debounce")
+
+        new Setting(containerEl)
+            .setName('Cache')
+            .setDesc('in days. Only applicable when generating diagrams locally')
+            .addSlider(slider => {
+                slider
+                    .setLimits(10, 360, 10)
+                    .setValue(this.plugin.settings.cache)
+                    .setDynamicTooltip()
+                    .onChange(async value => {
+                        this.plugin.settings.cache = value;
+                        await this.plugin.saveSettings();
+                    })
+            });
+
+        new Setting(containerEl)
+            .setName("Debounce")
             .setDesc("How often should the diagram refresh in seconds")
             .addText(text => text.setPlaceholder(String(DEFAULT_SETTINGS.debounce))
                 .setValue(String(this.plugin.settings.debounce))
