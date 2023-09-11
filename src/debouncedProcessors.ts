@@ -32,6 +32,7 @@ export class DebouncedProcessors implements Processor {
 
     processor = async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext, filetype: string, processor: (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => Promise<void>) => {
         const originalSource = source;
+        el.dataset.filetype = filetype;
         el.createEl("h6", {text: "Generating PlantUML diagram", cls: "puml-loading"});
 
         if (el.dataset.plantumlDebounce) {

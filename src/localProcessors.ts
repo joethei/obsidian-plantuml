@@ -174,8 +174,13 @@ export class LocalProcessors implements Processor {
             throw Error('Invalid local jar file');
         }
 
+        if(jarFullPath.endsWith('.jar')) {
+            return [
+                this.plugin.settings.javaPath, '-jar', '-Djava.awt.headless=true', '"' + jarFullPath + '"', '-charset', 'utf-8', '-graphvizdot', '"' + this.plugin.settings.dotPath + '"'
+            ];
+        }
         return [
-            this.plugin.settings.javaPath, '-jar', '-Djava.awt.headless=true', '"' + jarFullPath + '"', '-charset', 'utf-8', '-graphvizdot', '"' + this.plugin.settings.dotPath + '"' 
+            jarFullPath, '-Djava.awt.headless=true', '-charset', 'utf-8', '-graphvizdot', '"' + this.plugin.settings.dotPath + '"'
         ];
     }
 }
