@@ -118,4 +118,4 @@ Following are a few known issues.
 
 
 ## Installation
-`Settings > Third-party plugins > Community Plugins > Browse` and search for `PlantUML`.
+`Settings > Community plugins > Community Plugins > Browse` and search for `PlantUML`.
