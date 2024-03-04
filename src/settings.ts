@@ -1,4 +1,4 @@
-import {Notice, Platform, PluginSettingTab, Setting} from "obsidian";
+import { Notice, Platform, PluginSettingTab, Setting } from "obsidian";
 import PlantumlPlugin from "./main";
 
 export interface PlantUMLSettings {
@@ -10,6 +10,7 @@ export interface PlantUMLSettings {
     dotPath: string;
     defaultProcessor: string;
     cache: number;
+    exportPath: string;
 }
 
 export const DEFAULT_SETTINGS: PlantUMLSettings = {
@@ -21,6 +22,7 @@ export const DEFAULT_SETTINGS: PlantUMLSettings = {
     dotPath: 'dot',
     defaultProcessor: "png",
     cache: 60,
+    exportPath: ''
 }
 
 export class PlantUMLSettingsTab extends PluginSettingTab {
@@ -88,6 +90,18 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
                     .setValue(this.plugin.settings.dotPath)
                     .onChange(async (value) => {
                             this.plugin.settings.dotPath = value;
+                            await this.plugin.saveSettings();
+                        }
+                    )
+                );
+
+            new Setting(containerEl)
+                .setName("Diagram export path")
+                .setDesc("Path where exported diagrams will be saved relative to the vault root. Leave blank to save along side the note.")
+                .addText(text => text.setPlaceholder(DEFAULT_SETTINGS.exportPath)
+                    .setValue(this.plugin.settings.exportPath)
+                    .onChange(async (value) => {
+                            this.plugin.settings.exportPath = value;
                             await this.plugin.saveSettings();
                         }
                     )
