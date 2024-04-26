@@ -1,5 +1,5 @@
 import {
-    addIcon, Platform,
+    addIcon, Component, Platform,
     Plugin, TFile
 } from 'obsidian';
 import {DEFAULT_SETTINGS, PlantUMLSettings, PlantUMLSettingsTab} from "./settings";
@@ -10,9 +10,8 @@ import {Processor} from "./processor";
 import {ServerProcessor} from "./serverProcessor";
 import {Replacer} from "./functions";
 import {PumlView, VIEW_TYPE} from "./PumlView";
-import {Prec} from "@codemirror/state";
-import {asyncDecoBuilderExt} from "./decorations/EmbedDecoration";
 import localforage from "localforage";
+import {PumlEmbed} from "./embed";
 
 declare module "obsidian" {
     interface Workspace {
@@ -21,6 +20,21 @@ declare module "obsidian" {
             callback: (e: MouseEvent) => any,
             ctx?: any,
         ): EventRef;
+    }
+    interface App {
+        embedRegistry: EmbedRegistry;
+    }
+    interface EmbedRegistry extends Events {
+        registerExtensions(extensions: string[], embedCreator: EmbedCreator): void;
+        unregisterExtensions(extensions: string[]): void;
+    }
+    interface EmbedChild extends Component {
+        loadFile(): Promise<void>;
+    }
+    type EmbedCreator = (context: EmbedContext, file: TFile, path?: string) => Component;
+    interface EmbedContext {
+        app: App;
+        containerEl: HTMLElement;
     }
 }
 
@@ -69,7 +83,6 @@ export default class PlantumlPlugin extends Plugin {
             return new PumlView(leaf, this);
         });
         this.registerExtensions(["puml", "pu"], VIEW_TYPE);
-        this.registerEditorExtension(Prec.lowest(asyncDecoBuilderExt(this)));
 
         this.registerMarkdownCodeBlockProcessor("plantuml", processor.png);
         this.registerMarkdownCodeBlockProcessor("plantuml-ascii", processor.ascii);
@@ -80,6 +93,8 @@ export default class PlantumlPlugin extends Plugin {
 
         //keep this processor for backwards compatibility
         this.registerMarkdownCodeBlockProcessor("plantuml-map", processor.png);
+
+        this.app.embedRegistry.registerExtensions(['puml', 'pu'], (ctx, file, subpath) => new PumlEmbed(this, file, ctx));
 
         this.cleanupLocalStorage();
         localforage.config({
@@ -142,35 +157,6 @@ export default class PlantumlPlugin extends Plugin {
         }));
 
         this.observer.observe(document, {childList: true, subtree: true});
-
-        //embed handling
-        this.registerMarkdownPostProcessor(async (element, context) => {
-            const embeddedItems = element.querySelectorAll(".internal-embed");
-            if (embeddedItems.length === 0) {
-                return;
-            }
-
-            for (const key in embeddedItems) {
-                const item = embeddedItems[key];
-                if (typeof item.getAttribute !== "function") return;
-
-                const filename = item.getAttribute("src");
-                const file = this.app.metadataCache.getFirstLinkpathDest(filename.split("#")[0], context.sourcePath);
-                if (file && file instanceof TFile && (file.extension === "puml" || file.extension === "pu")) {
-                    const fileContent = await this.app.vault.read(file);
-
-                    const div = createDiv();
-                    if(this.settings.defaultProcessor === "png") {
-                        await this.getProcessor().png(fileContent, div, context);
-                    }else {
-                        await this.getProcessor().svg(fileContent, div, context);
-                    }
-
-                    item.parentElement.replaceChild(div, item);
-                }
-            }
-
-        });
     }
 
     async cleanupCache() {
@@ -202,6 +188,7 @@ export default class PlantumlPlugin extends Plugin {
     async onunload(): Promise<void> {
         console.log('unloading plugin plantuml');
         this.observer.disconnect();
+        this.app.embedRegistry.unregisterExtensions(['puml', 'pu']);
     }
 
     async loadSettings(): Promise<void> {

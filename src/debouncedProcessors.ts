@@ -7,7 +7,7 @@ export class DebouncedProcessors implements Processor {
 
     SECONDS_TO_MS_FACTOR = 1000;
 
-    debounceMap = new Map<string, Debouncer<[string, HTMLElement, MarkdownPostProcessorContext]>>();
+    debounceMap = new Map<string, Debouncer<[string, HTMLElement, MarkdownPostProcessorContext], unknown>>();
 
     debounceTime: number;
     plugin: PlantumlPlugin;
@@ -38,7 +38,7 @@ export class DebouncedProcessors implements Processor {
         if (el.dataset.plantumlDebounce) {
             const debounceId = el.dataset.plantumlDebounce;
             if (this.debounceMap.has(debounceId)) {
-                await this.debounceMap.get(debounceId)(source, el, ctx);
+                this.debounceMap.get(debounceId)(source, el, ctx);
             }
         } else {
             const func = debounce(processor, this.debounceTime, true);
@@ -52,7 +52,7 @@ export class DebouncedProcessors implements Processor {
             await processor(source, el, ctx);
             el.addEventListener('contextmenu', (event) => {
 
-                const menu = new Menu(this.plugin.app)
+                const menu = new Menu()
                     .addItem(item => {
                         item
                             .setTitle('Copy diagram source')
@@ -61,7 +61,6 @@ export class DebouncedProcessors implements Processor {
                                 await navigator.clipboard.writeText(originalSource);
                             })
                     })
-
                     .addItem(item => {
                         item
                             .setTitle('Copy diagram')
