@@ -5,11 +5,11 @@ import {
 import {DEFAULT_SETTINGS, PlantUMLSettings, PlantUMLSettingsTab} from "./settings";
 import {LocalProcessors} from "./localProcessors";
 import {DebouncedProcessors} from "./debouncedProcessors";
-import {isUsingLivePreviewEnabledEditor, LOGO_SVG} from "./const";
+import {LOGO_SVG} from "./const";
 import {Processor} from "./processor";
 import {ServerProcessor} from "./serverProcessor";
 import {Replacer} from "./functions";
-import {VIEW_TYPE} from "./PumlView";
+import {PumlView, VIEW_TYPE} from "./PumlView";
 import {Prec} from "@codemirror/state";
 import {asyncDecoBuilderExt} from "./decorations/EmbedDecoration";
 import localforage from "localforage";
@@ -64,15 +64,12 @@ export default class PlantumlPlugin extends Plugin {
 
         const processor = new DebouncedProcessors(this);
 
-        if (isUsingLivePreviewEnabledEditor()) {
-            const view = require("./PumlView");
-            addIcon("document-" + view.VIEW_TYPE, LOGO_SVG);
-            this.registerView(view.VIEW_TYPE, (leaf) => {
-                return new view.PumlView(leaf, this);
-            });
-            this.registerExtensions(["puml", "pu"], view.VIEW_TYPE);
-            this.registerEditorExtension(Prec.lowest(asyncDecoBuilderExt(this)));
-        }
+        addIcon("document-" + VIEW_TYPE, LOGO_SVG);
+        this.registerView(VIEW_TYPE, (leaf) => {
+            return new PumlView(leaf, this);
+        });
+        this.registerExtensions(["puml", "pu"], VIEW_TYPE);
+        this.registerEditorExtension(Prec.lowest(asyncDecoBuilderExt(this)));
 
         this.registerMarkdownCodeBlockProcessor("plantuml", processor.png);
         this.registerMarkdownCodeBlockProcessor("plantuml-ascii", processor.ascii);
@@ -213,5 +210,9 @@ export default class PlantumlPlugin extends Plugin {
 
     async saveSettings(): Promise<void> {
         await this.saveData(this.settings);
+    }
+
+    async onExternalSettingsChange() {
+        await this.loadSettings();
     }
 }
