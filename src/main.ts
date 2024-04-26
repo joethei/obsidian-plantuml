@@ -1,13 +1,13 @@
 import {
-    addIcon, Component, Platform,
-    Plugin, TFile
+    addIcon, Platform,
+    Plugin
 } from 'obsidian';
 import {DEFAULT_SETTINGS, PlantUMLSettings, PlantUMLSettingsTab} from "./settings";
-import {LocalProcessors} from "./localProcessors";
-import {DebouncedProcessors} from "./debouncedProcessors";
+import {LocalProcessors} from "./processors/localProcessors";
+import {DebouncedProcessors} from "./processors/debouncedProcessors";
 import {LOGO_SVG} from "./const";
-import {Processor} from "./processor";
-import {ServerProcessor} from "./serverProcessor";
+import {Processor} from "./processors/processor";
+import {ServerProcessor} from "./processors/serverProcessor";
 import {Replacer} from "./functions";
 import {PumlView, VIEW_TYPE} from "./PumlView";
 import localforage from "localforage";
@@ -84,10 +84,12 @@ export default class PlantumlPlugin extends Plugin {
         });
         this.registerExtensions(["puml", "pu"], VIEW_TYPE);
 
-        this.registerMarkdownCodeBlockProcessor("plantuml", processor.png);
+        this.registerMarkdownCodeBlockProcessor("plantuml", processor.default);
+        this.registerMarkdownCodeBlockProcessor("plantuml-png", processor.png);
         this.registerMarkdownCodeBlockProcessor("plantuml-ascii", processor.ascii);
         this.registerMarkdownCodeBlockProcessor("plantuml-svg", processor.svg);
-        this.registerMarkdownCodeBlockProcessor("puml", processor.png);
+        this.registerMarkdownCodeBlockProcessor("puml", processor.default);
+        this.registerMarkdownCodeBlockProcessor("puml-png", processor.png);
         this.registerMarkdownCodeBlockProcessor("puml-svg", processor.svg);
         this.registerMarkdownCodeBlockProcessor("puml-ascii", processor.ascii);
 

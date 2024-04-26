@@ -1,6 +1,6 @@
 import { debounce, Debouncer, MarkdownPostProcessorContext, Menu, Notice, TFile } from "obsidian";
 import { v4 as uuidv4 } from "uuid";
-import PlantumlPlugin from "./main";
+import PlantumlPlugin from "../main";
 import { Processor } from "./processor";
 
 export class DebouncedProcessors implements Processor {
@@ -16,6 +16,10 @@ export class DebouncedProcessors implements Processor {
         this.plugin = plugin;
         const debounceTime = plugin.settings.debounce;
         this.debounceTime = debounceTime * this.SECONDS_TO_MS_FACTOR;
+    }
+
+    default = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+        await this.png(source, el, ctx);
     }
 
     png = async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {

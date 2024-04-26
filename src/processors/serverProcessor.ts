@@ -1,9 +1,9 @@
 import {MarkdownPostProcessorContext, request} from "obsidian";
-import {DEFAULT_SETTINGS} from "./settings";
+import {DEFAULT_SETTINGS} from "../settings";
 import * as plantuml from "plantuml-encoder";
-import PlantumlPlugin from "./main";
+import PlantumlPlugin from "../main";
 import {Processor} from "./processor";
-import {insertAsciiImage, insertImageWithMap, insertSvgImage} from "./functions";
+import {insertAsciiImage, insertImageWithMap, insertSvgImage} from "../functions";
 
 export class ServerProcessor implements Processor {
     plugin: PlantumlPlugin;
