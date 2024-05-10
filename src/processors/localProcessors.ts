@@ -191,11 +191,11 @@ export class LocalProcessors implements Processor {
 
         if(jarFullPath.endsWith('.jar')) {
             return [
-                this.plugin.settings.javaPath, '-jar', '"' + jarFullPath + '"', '-Djava.awt.headless=true', '-charset', 'utf-8', '-graphvizdot', '"' + this.plugin.settings.dotPath + '"'
+                this.plugin.settings.javaPath, '-jar', '"' + jarFullPath + '"', this.plugin.settings.args ,'-Djava.awt.headless=true', '-charset', 'utf-8', '-graphvizdot', '"' + this.plugin.settings.dotPath + '"'
             ];
         }
         return [
-            jarFullPath, '-Djava.awt.headless=true', '-charset', 'utf-8', '-graphvizdot', '"' + this.plugin.settings.dotPath + '"'
+            jarFullPath, this.plugin.settings.args , '-Djava.awt.headless=true', '-charset', 'utf-8', '-graphvizdot', '"' + this.plugin.settings.dotPath + '"'
         ];
     }
 }

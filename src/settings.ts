@@ -11,6 +11,7 @@ export interface PlantUMLSettings {
     defaultProcessor: string;
     cache: number;
     exportPath: string;
+    args: string;
 }
 
 export const DEFAULT_SETTINGS: PlantUMLSettings = {
@@ -22,7 +23,9 @@ export const DEFAULT_SETTINGS: PlantUMLSettings = {
     dotPath: 'dot',
     defaultProcessor: "png",
     cache: 60,
-    exportPath: ''
+    exportPath: '',
+    args: ''
+
 }
 
 export class PlantUMLSettingsTab extends PluginSettingTab {
@@ -106,6 +109,18 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
                         }
                     )
                 );
+            new Setting(containerEl)
+                .setName("Argument")
+                .setDesc("Argument append to java -jar plantuml")
+                .addText(text => text.setPlaceholder(DEFAULT_SETTINGS.args)
+                    .setValue(this.plugin.settings.args)
+                    .onChange(async (value) => {
+                            this.plugin.settings.args = value;
+                            await this.plugin.saveSettings();
+                        }
+                    )
+                );
+ 
         }
 
         new Setting(containerEl)
