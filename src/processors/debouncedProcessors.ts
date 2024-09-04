@@ -88,7 +88,7 @@ export class DebouncedProcessors implements Processor {
 
                                 const svg = el.querySelector('svg');
                                 if (svg) {
-                                    await navigator.clipboard.writeText(svg.outerHTML);
+                                    await navigator.clipboard.writeText(svg.outerHTML.replace(/&nbsp;/g, ''));
                                     new Notice('Diagram copied to clipboard');
                                 }
                                 const code = el.querySelector('code');
