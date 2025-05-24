@@ -13,18 +13,8 @@ export class Replacer {
         this.plugin = plugin;
     }
 
-    public replaceNonBreakingSpaces(text: string): string {
-        const lines = text.split(/\r?\n/);
-        const resultLines: string[] = [];
-        if (text.startsWith("@startmindmap")) {
-            for (const line of lines) {
-                resultLines.push(line.replace(/\s+/g, ' '));
-            }
-        } else {
-            resultLines.push(...lines);
-        }
-        const result = resultLines.join('\r\n');
-        return result.replace(/&nbsp;/gi, " ");
+    public decodeWhiteSpaces(text: string): string {
+        return text.replace(/&nbsp;/gi, " ");
     }
 
     /**
