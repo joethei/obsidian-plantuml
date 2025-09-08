@@ -35,6 +35,7 @@ declare module "obsidian" {
     interface EmbedContext {
         app: App;
         containerEl: HTMLElement;
+        sourcePath: string
     }
 }
 

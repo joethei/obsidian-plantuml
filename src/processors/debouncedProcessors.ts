@@ -1,4 +1,4 @@
-import { debounce, Debouncer, MarkdownPostProcessorContext, Menu, Notice, TFile } from "obsidian";
+import { debounce, Debouncer, EmbedContext, MarkdownPostProcessorContext, Menu, Notice, TFile } from "obsidian";
 import { v4 as uuidv4 } from "uuid";
 import PlantumlPlugin from "../main";
 import { Processor } from "./processor";
@@ -7,7 +7,7 @@ export class DebouncedProcessors implements Processor {
 
     SECONDS_TO_MS_FACTOR = 1000;
 
-    debounceMap = new Map<string, Debouncer<[string, HTMLElement, MarkdownPostProcessorContext], unknown>>();
+    debounceMap = new Map<string, Debouncer<[string, HTMLElement, MarkdownPostProcessorContext | EmbedContext], unknown>>();
 
     debounceTime: number;
     plugin: PlantumlPlugin;
@@ -18,23 +18,23 @@ export class DebouncedProcessors implements Processor {
         this.debounceTime = debounceTime * this.SECONDS_TO_MS_FACTOR;
     }
 
-    default = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+    default = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext | EmbedContext) => {
         await this.png(source, el, ctx);
     }
 
-    png = async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+    png = async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext | EmbedContext) => {
         await this.processor(source, el, ctx, "png", this.plugin.getProcessor().png);
     }
 
-    ascii = async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+    ascii = async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext | EmbedContext) => {
         await this.processor(source, el, ctx, "ascii", this.plugin.getProcessor().ascii);
     }
 
-    svg = async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+    svg = async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext | EmbedContext) => {
         await this.processor(source, el, ctx, "svg", this.plugin.getProcessor().svg);
     }
 
-    processor = async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext, filetype: string, processor: (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => Promise<void>) => {
+    processor = async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext | EmbedContext, filetype: string, processor: (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => Promise<void>) => {
         const originalSource = source;
         el.dataset.filetype = filetype;
         el.createEl("h6", {text: "Generating PlantUML diagram", cls: "puml-loading"});

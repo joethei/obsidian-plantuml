@@ -3,7 +3,7 @@
  * @param text
  * @param path
  */
-import {MarkdownPostProcessorContext} from "obsidian";
+import { EmbedContext, MarkdownPostProcessorContext, TFile } from "obsidian";
 import PlantumlPlugin from "./main";
 
 export class Replacer {
@@ -23,23 +23,21 @@ export class Replacer {
      * @param path path of the current file
      * @param filetype
      */
-    public replaceLinks(text: string, path: string, filetype: string) : string {
+    public replaceLinks(text: string, path: string, filetype: string): string {
         return text.replace(/\[\[\[([\s\S]*?)\]\]\]/g, ((_, args) => {
             const split = args.split("|");
             const file = this.plugin.app.metadataCache.getFirstLinkpathDest(split[0], path);
-            if(!file) {
-                return "File with name: " + split[0] + " not found";
+
+            const filename = split[0];
+            let url;
+            if (file) {
+                //@ts-expect-error
+                url = this.plugin.app.getObsidianUrl(file);
             }
-            let alias = file.basename;
-            if(filetype === "png") {
-                //@ts-ignore
-                const url = this.plugin.app.getObsidianUrl(file);
-                if (split[1]) {
-                    alias = split[1];
-                }
-                return "[[" + url + " " + alias + "]]";
+            else {
+                url = `obsidian://new?vault=${encodeURIComponent(this.plugin.app.vault.getName())}&file=${encodeURIComponent(filename)}`;
             }
-            return "[[" + file.basename + "]]";
+            return "[[" + url + "]]";
         }));
     }
 
@@ -54,7 +52,7 @@ export class Replacer {
         }
         const file = this.plugin.app.vault.getAbstractFileByPath(path);
 
-        if(!file) {
+        if (!file) {
             //@ts-ignore
             return this.plugin.app.vault.adapter.getFullPath("");
         }
@@ -65,7 +63,7 @@ export class Replacer {
         return this.plugin.app.vault.adapter.getFullPath(folder.path);
     }
 
-    public getPath(ctx: MarkdownPostProcessorContext) {
+    public getPath(ctx: MarkdownPostProcessorContext | EmbedContext) {
         return this.getFullPath(ctx ? ctx.sourcePath : '');
     }
 
@@ -75,9 +73,9 @@ export function insertImageWithMap(el: HTMLElement, image: string, map: string, 
     el.empty();
 
     const img = document.createElement("img");
-    if(image.startsWith("http")) {
+    if (image.startsWith("http")) {
         img.src = image;
-    }else {
+    } else {
         img.src = "data:image/png;base64," + image;
     }
     img.useMap = "#" + encodedDiagram;

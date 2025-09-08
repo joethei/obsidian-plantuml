@@ -1,4 +1,4 @@
-import {MarkdownPostProcessorContext, request} from "obsidian";
+import {EmbedContext, MarkdownPostProcessorContext, request} from "obsidian";
 import {DEFAULT_SETTINGS} from "../settings";
 import * as plantuml from "plantuml-encoder";
 import PlantumlPlugin from "../main";
@@ -12,7 +12,7 @@ export class ServerProcessor implements Processor {
         this.plugin = plugin;
     }
 
-    svg = async(source: string, el: HTMLElement, _: MarkdownPostProcessorContext) => {
+    svg = async(source: string, el: HTMLElement, _: MarkdownPostProcessorContext | EmbedContext) => {
         //make sure url is defined. once the setting gets reset to default, an empty string will be returned by settings
         let url = this.plugin.settings.server_url;
         if (url.length == 0) {
@@ -30,7 +30,7 @@ export class ServerProcessor implements Processor {
         });
     };
 
-    png = async(source: string, el: HTMLElement, _: MarkdownPostProcessorContext) => {
+    png = async(source: string, el: HTMLElement, _: MarkdownPostProcessorContext | EmbedContext) => {
         //make sure url is defined. once the setting gets reset to default, an empty string will be returned by settings
         let url = this.plugin.settings.server_url;
         if (url.length == 0) {
@@ -48,7 +48,7 @@ export class ServerProcessor implements Processor {
 
         insertImageWithMap(el, image, map, encodedDiagram);
     }
-    ascii = async(source: string, el: HTMLElement, _: MarkdownPostProcessorContext) => {
+    ascii = async(source: string, el: HTMLElement, _: MarkdownPostProcessorContext | EmbedContext) => {
         //make sure url is defined, once the setting gets reset to default, an empty string will be returned by settings
         let url = this.plugin.settings.server_url;
         if (url.length == 0) {

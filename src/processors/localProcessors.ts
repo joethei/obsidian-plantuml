@@ -1,6 +1,6 @@
 import PlantumlPlugin from "../main";
 import {Processor} from "./processor";
-import {MarkdownPostProcessorContext, moment} from "obsidian";
+import {EmbedContext, MarkdownPostProcessorContext, moment} from "obsidian";
 import * as plantuml from "plantuml-encoder";
 import {insertAsciiImage, insertImageWithMap, insertSvgImage} from "../functions";
 import {OutputType} from "../const";
@@ -14,7 +14,7 @@ export class LocalProcessors implements Processor {
         this.plugin = plugin;
     }
 
-    ascii = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+    ascii = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext | EmbedContext) => {
         const encodedDiagram = plantuml.encode(source);
         const item: string = await localforage.getItem('ascii-' + encodedDiagram);
         if(item) {
@@ -29,7 +29,7 @@ export class LocalProcessors implements Processor {
         await localforage.setItem('ts-' + encodedDiagram, Date.now());
     }
 
-    png = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+    png = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext | EmbedContext) => {
         const encodedDiagram = plantuml.encode(source);
         const item: string = await localforage.getItem('png-' + encodedDiagram);
         if(item) {
@@ -50,7 +50,7 @@ export class LocalProcessors implements Processor {
         insertImageWithMap(el, image, map, encodedDiagram);
     }
 
-    svg = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+    svg = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext | EmbedContext) => {
         const encodedDiagram = plantuml.encode(source);
         const item: string = await localforage.getItem('svg-' + encodedDiagram);
         if(item) {

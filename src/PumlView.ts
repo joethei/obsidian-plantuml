@@ -1,4 +1,4 @@
-import {debounce, Debouncer, Keymap, setIcon, TextFileView, ViewStateResult, WorkspaceLeaf} from "obsidian";
+import { Keymap, MarkdownPostProcessorContext, setIcon, TextFileView, ViewStateResult, WorkspaceLeaf } from "obsidian";
 import PlantumlPlugin from "./main";
 import {
     drawSelection,
@@ -8,9 +8,10 @@ import {
     keymap,
     lineNumbers
 } from "@codemirror/view";
-import {Annotation, EditorState, Extension, Transaction} from "@codemirror/state";
-import {highlightSelectionMatches, search} from "@codemirror/search";
-import {defaultKeymap, history, indentWithTab} from "@codemirror/commands";
+import { Annotation, EditorState, Extension, Transaction } from "@codemirror/state";
+import { highlightSelectionMatches, search } from "@codemirror/search";
+import { defaultKeymap, history, indentWithTab } from "@codemirror/commands";
+import { DebouncedProcessors } from "./processors/debouncedProcessors";
 
 export const VIEW_TYPE = "plantuml";
 
@@ -23,7 +24,7 @@ function syncDispatch(from: number) {
         views[from].update([tr]);
         if (tr.changes && tr.annotation && !tr.changes.empty && !tr.annotation(syncAnnotation)) {
             for (let i = 0; i < views.length; i++) {
-                if(i !== from) {
+                if (i !== from) {
                     views[i].dispatch({
                         changes: tr.changes,
                         annotations: syncAnnotation.of(true)
@@ -44,7 +45,7 @@ export class PumlView extends TextFileView {
     currentView: 'source' | 'preview';
     plugin: PlantumlPlugin;
     dispatchId = -1;
-    debounced: Debouncer<any>;
+    debouncedProcessors: DebouncedProcessors
 
     extensions: Extension[] = [
         highlightActiveLine(),
@@ -55,7 +56,7 @@ export class PumlView extends TextFileView {
         history(),
         search(),
         EditorView.updateListener.of(async v => {
-            if(v.docChanged) {
+            if (v.docChanged) {
                 this.requestSave();
                 await this.renderPreview();
             }
@@ -66,17 +67,17 @@ export class PumlView extends TextFileView {
         super(leaf);
         this.plugin = plugin;
 
-        this.debounced = debounce(this.plugin.getProcessor().png, this.plugin.settings.debounce * 1000, true);
+        this.debouncedProcessors = new DebouncedProcessors(plugin);
 
-        this.sourceEl = this.contentEl.createDiv({cls: 'plantuml-source-view', attr: {'style': 'display: block'}});
-        this.previewEl = this.contentEl.createDiv({cls: 'plantuml-preview-view', attr: {'style': 'display: none'}});
+        this.sourceEl = this.contentEl.createDiv({ cls: 'plantuml-source-view', attr: { 'style': 'display: block' } });
+        this.previewEl = this.contentEl.createDiv({ cls: 'plantuml-preview-view', attr: { 'style': 'display: none' } });
 
         const vault = (this.app.vault as any);
 
         if (vault.getConfig("showLineNumber")) {
             this.extensions.push(lineNumbers());
         }
-        if(vault.getConfig("lineWrap")) {
+        if (vault.getConfig("lineWrap")) {
             this.extensions.push(EditorView.lineWrapping);
         }
 
@@ -132,7 +133,7 @@ export class PumlView extends TextFileView {
         // undocumented: Get the current default view mode to switch to
         const defaultViewMode = (this.app.vault as any).getConfig('defaultViewMode');
         this.currentView = defaultViewMode;
-        await this.setState({...this.getState(), mode: defaultViewMode}, {});
+        await this.setState({ ...this.getState(), mode: defaultViewMode }, {});
     }
 
     onunload() {
@@ -151,39 +152,39 @@ export class PumlView extends TextFileView {
                 this.app.workspace.duplicateLeaf(this.leaf).then(async () => {
                     const viewState = this.app.workspace.activeLeaf?.getViewState();
                     if (viewState) {
-                        viewState.state = {...viewState.state, mode: mode};
+                        viewState.state = { ...viewState.state, mode: mode };
                         await this.app.workspace.activeLeaf?.setViewState(viewState);
                     }
                 });
             } else {
-                await this.setState({...this.getState(), mode: mode}, {});
+                await this.setState({ ...this.getState(), mode: mode }, {});
             }
         }
     }
 
     // get the data for save
-    getViewData() : string {
+    getViewData(): string {
         return this.editor.state.sliceDoc();
     }
 
     // load the data into the view
     async setViewData(data: string, clear: boolean) {
         this.data = data;
-         if (clear) {
-             this.editor.setState(EditorState.create({
-                 doc: data,
-                 extensions: this.extensions
-             }));
+        if (clear) {
+            this.editor.setState(EditorState.create({
+                doc: data,
+                extensions: this.extensions
+            }));
 
-         }else {
-             this.editor.dispatch({
-                 changes: {
-                     from: 0,
-                     to: this.editor.state.doc.length,
-                     insert: data,
-                 }
-             })
-         }
+        } else {
+            this.editor.dispatch({
+                changes: {
+                    from: 0,
+                    to: this.editor.state.doc.length,
+                    insert: data,
+                }
+            })
+        }
         // if we're in preview view, also render that
         if (this.currentView === 'preview') this.renderPreview();
     }
@@ -209,13 +210,13 @@ export class PumlView extends TextFileView {
 
 
     async renderPreview() {
-        if(this.currentView !== "preview") return;
+        if (this.currentView !== "preview") return;
         this.previewEl.empty();
-        const loadingHeader = this.previewEl.createEl("h1", {text: "Loading"});
+        const loadingHeader = this.previewEl.createEl("h1", { text: "Loading" });
         const previewDiv = this.previewEl.createDiv();
 
 
-        this.debounced(this.getViewData(), previewDiv, null);
+        this.debouncedProcessors.png(this.getViewData(), previewDiv, { sourcePath: this.file.path } as MarkdownPostProcessorContext)
         loadingHeader.remove();
     }
 }
