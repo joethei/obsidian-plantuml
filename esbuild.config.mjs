@@ -44,7 +44,6 @@ esbuild.build({
         '@codemirror/view',
         ...builtins],
     format: 'cjs',
-    watch: !prod,
     target: 'es2016',
     logLevel: "info",
     sourcemap: prod ? false : 'inline',

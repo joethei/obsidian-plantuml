@@ -1,10 +1,26 @@
 import PlantumlPlugin from "../main";
 import {Processor} from "./processor";
-import {MarkdownPostProcessorContext, moment} from "obsidian";
+import {MarkdownPostProcessorContext, Platform} from "obsidian";
 import * as plantuml from "plantuml-encoder";
 import {insertAsciiImage, insertImageWithMap, insertSvgImage} from "../functions";
 import {OutputType} from "../const";
 import * as localforage from "localforage";
+
+let exec: typeof import('child_process').exec;
+let Buffer: typeof import('buffer').Buffer;
+let pathModule: typeof import('path');
+let osModule: typeof import('os');
+
+async function loadNodeModules() {
+    if (Platform.isDesktop && !exec) {
+        // Obsidian shadows `require` with its own resolver; window.require is Electron's Node.js require
+        const nodeRequire = (window as Window & {require: (id: string) => unknown}).require;
+        exec = (nodeRequire('child_process') as typeof import('child_process')).exec;
+        Buffer = (nodeRequire('buffer') as typeof import('buffer')).Buffer;
+        pathModule = nodeRequire('path') as typeof import('path');
+        osModule = nodeRequire('os') as typeof import('os');
+    }
+}
 
 export class LocalProcessors implements Processor {
 
@@ -15,6 +31,12 @@ export class LocalProcessors implements Processor {
     }
 
     ascii = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+        if (!Platform.isDesktop) {
+            throw new Error('Local processing is only available on desktop');
+        }
+
+        await loadNodeModules();
+
         const encodedDiagram = plantuml.encode(source);
         const item: string = await localforage.getItem('ascii-' + encodedDiagram);
         if(item) {
@@ -30,6 +52,12 @@ export class LocalProcessors implements Processor {
     }
 
     png = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+        if (!Platform.isDesktop) {
+            throw new Error('Local processing is only available on desktop');
+        }
+
+        await loadNodeModules();
+
         const encodedDiagram = plantuml.encode(source);
         const item: string = await localforage.getItem('png-' + encodedDiagram);
         if(item) {
@@ -51,6 +79,12 @@ export class LocalProcessors implements Processor {
     }
 
     svg = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+        if (!Platform.isDesktop) {
+            throw new Error('Local processing is only available on desktop');
+        }
+
+        await loadNodeModules();
+
         const encodedDiagram = plantuml.encode(source);
         const item: string = await localforage.getItem('svg-' + encodedDiagram);
         if(item) {
@@ -65,14 +99,17 @@ export class LocalProcessors implements Processor {
     }
 
     async generateLocalMap(source: string, path: string): Promise<string> {
-        const {exec} = require('child_process');
-        const args = this.resolveLocalJarCmd().concat(['-pipemap']);
-        const child = exec(args.join(" "), {encoding: 'binary', cwd: path});
+        if (!Platform.isDesktop) {
+            throw new Error('Local processing is only available on desktop');
+        }
+
+        const args = await this.resolveLocalJarCmd();
+        const child = exec(args.concat(['-pipemap']).join(" "), {encoding: 'binary', cwd: path});
 
         let stdout = "";
 
         if (child.stdout) {
-            child.stdout.on("data", (data: any) => {
+            child.stdout.on("data", (data: string) => {
                 stdout += data;
             });
         }
@@ -80,83 +117,78 @@ export class LocalProcessors implements Processor {
         return new Promise((resolve, reject) => {
             child.on("error", reject);
 
-            child.on("close", (code: any) => {
+            child.on("close", (code) => {
                 if (code === 0) {
                     resolve(stdout);
                     return;
                 } else if (code === 1) {
-                    console.log(stdout);
+                    console.error(stdout);
                     reject(new Error(`an error occurred`));
                 } else {
-                    reject(new Error(`child exited with code ${code}`));
+                    reject(new Error(`child exited with code ${String(code)}`));
                 }
             });
 
-            child.stdin.write(source);
-            child.stdin.end();
+            child.stdin?.write(source);
+            child.stdin?.end();
         });
     }
 
     async generateLocalImage(source: string, type: OutputType, path: string): Promise<string> {
-        const {ChildProcess, exec} = require('child_process');
-        const args = this.resolveLocalJarCmd().concat(['-t' + type, '-pipe']);
-
-        let child: typeof ChildProcess;
-        if (type === OutputType.PNG) {
-            child = exec(args.join(" "), {encoding: 'binary', cwd: path});
-        } else {
-            child = exec(args.join(" "), {encoding: 'utf-8', cwd: path});
+        if (!Platform.isDesktop) {
+            throw new Error('Local processing is only available on desktop');
         }
 
-        let stdout: any;
-        let stderr: any;
+        const args = await this.resolveLocalJarCmd();
+        const cmdArgs = args.concat(['-t' + type, '-pipe']);
+
+        const child = exec(cmdArgs.join(" "), {
+            encoding: type === OutputType.PNG ? 'binary' : 'utf-8',
+            cwd: path
+        });
+
+        let stdout: string | null = null;
+        let stderr: string | null = null;
 
         if (child.stdout) {
-            child.stdout.on("data", (data: any) => {
-                if (stdout === undefined) {
-                    stdout = data;
-                } else stdout += data;
+            child.stdout.on("data", (data: string) => {
+                stdout = stdout === null ? data : stdout + data;
             });
         }
 
         if (child.stderr) {
-            child.stderr.on('data', (data: any) => {
-                if (stderr === undefined) {
-                    stderr = data;
-                } else stderr += data;
+            child.stderr.on('data', (data: string) => {
+                stderr = stderr === null ? data : stderr + data;
             });
         }
 
         return new Promise((resolve, reject) => {
             child.on("error", reject);
 
-            child.on("close", (code: any) => {
-                if(stdout === undefined) {
+            child.on("close", (code) => {
+                if (stdout === null) {
                     return;
                 }
                 if (code === 0) {
                     if (type === OutputType.PNG) {
-                        const buf = new Buffer(stdout, 'binary');
-                        resolve(buf.toString('base64'));
+                        resolve(Buffer.from(stdout, 'binary').toString('base64'));
                         return;
                     }
                     resolve(stdout);
                     return;
                 } else if (code === 1) {
                     console.error(stdout);
-                    reject(new Error(stderr));
+                    reject(new Error(stderr ?? ''));
                 } else {
                     if (type === OutputType.PNG) {
-                        const buf = new Buffer(stdout, 'binary');
-                        resolve(buf.toString('base64'));
+                        resolve(Buffer.from(stdout, 'binary').toString('base64'));
                         return;
                     }
                     resolve(stdout);
-                    return;
                 }
             });
-            child.stdin.write(source, "utf-8");
-            child.stdin.end();
+            child.stdin?.write(source, "utf-8");
+            child.stdin?.end();
         });
     }
 
@@ -164,24 +196,26 @@ export class LocalProcessors implements Processor {
      * To support local jar settings with unix-like style, and search local jar file
      * from current vault path.
      */
-    private resolveLocalJarCmd(): string[] {
+    private async resolveLocalJarCmd(): Promise<string[]> {
+        if (!Platform.isDesktop) {
+            throw new Error('Local processing is only available on desktop');
+        }
+
         const jarFromSettings = this.plugin.settings.localJar;
-        const {isAbsolute, resolve} = require('path');
-        const {userInfo} = require('os');
         let jarFullPath: string;
         const path = this.plugin.replacer.getFullPath("");
 
         if (jarFromSettings[0] === '~') {
             // As a workaround, I'm not sure what would isAbsolute() return with unix-like path
-            jarFullPath = userInfo().homedir + jarFromSettings.slice(1);
+            jarFullPath = osModule.userInfo().homedir + jarFromSettings.slice(1);
         }
         else {
-            if (isAbsolute(jarFromSettings)) {
+            if (pathModule.isAbsolute(jarFromSettings)) {
                 jarFullPath = jarFromSettings;
             }
             else {
                 // the default search path is current vault
-                jarFullPath = resolve(path, jarFromSettings);
+                jarFullPath = pathModule.resolve(path, jarFromSettings);
             }
         }
 

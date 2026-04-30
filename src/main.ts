@@ -1,6 +1,6 @@
 import {
-    addIcon, Platform,
-    Plugin
+    addIcon, Component, EventRef, Events, Platform,
+    Plugin, TFile
 } from 'obsidian';
 import {DEFAULT_SETTINGS, PlantUMLSettings, PlantUMLSettingsTab} from "./settings";
 import {LocalProcessors} from "./processors/localProcessors";
@@ -17,8 +17,8 @@ declare module "obsidian" {
     interface Workspace {
         on(
             name: "hover-link",
-            callback: (e: MouseEvent) => any,
-            ctx?: any,
+            callback: (e: MouseEvent) => unknown,
+            ctx?: unknown,
         ): EventRef;
     }
     interface App {
@@ -65,100 +65,103 @@ export default class PlantumlPlugin extends Plugin {
         return this.serverProcessor;
     }
 
-    async onload(): Promise<void> {
-        console.log('loading plugin plantuml');
-        await this.loadSettings();
-        this.addSettingTab(new PlantUMLSettingsTab(this));
-        this.replacer = new Replacer(this);
+    onload(): void {
+        void this.loadSettings().then(async () => {
+            this.addSettingTab(new PlantUMLSettingsTab(this));
+            this.replacer = new Replacer(this);
 
-        this.serverProcessor = new ServerProcessor(this);
-        if (Platform.isDesktopApp) {
-            this.localProcessor = new LocalProcessors(this);
+            this.serverProcessor = new ServerProcessor(this);
+            if (Platform.isDesktopApp) {
+                this.localProcessor = new LocalProcessors(this);
+            }
+
+            const processor = new DebouncedProcessors(this);
+
+            addIcon("document-" + VIEW_TYPE, LOGO_SVG);
+            this.registerView(VIEW_TYPE, (leaf) => {
+                return new PumlView(leaf, this);
+            });
+            this.registerExtensions(["puml", "pu"], VIEW_TYPE);
+
+            this.registerMarkdownCodeBlockProcessor("plantuml", processor.default);
+            this.registerMarkdownCodeBlockProcessor("plantuml-png", processor.png);
+            this.registerMarkdownCodeBlockProcessor("plantuml-ascii", processor.ascii);
+            this.registerMarkdownCodeBlockProcessor("plantuml-svg", processor.svg);
+            this.registerMarkdownCodeBlockProcessor("puml", processor.default);
+            this.registerMarkdownCodeBlockProcessor("puml-png", processor.png);
+            this.registerMarkdownCodeBlockProcessor("puml-svg", processor.svg);
+            this.registerMarkdownCodeBlockProcessor("puml-ascii", processor.ascii);
+
+            //keep this processor for backwards compatibility
+            this.registerMarkdownCodeBlockProcessor("plantuml-map", processor.png);
+
+            this.app.embedRegistry.registerExtensions(['puml', 'pu'], (ctx, file, _subpath) => new PumlEmbed(this, file, ctx));
+
+            this.cleanupLocalStorage();
+            localforage.config({
+                name: 'puml',
+                description: 'PlantUML plugin'
+            });
+            await this.cleanupCache();
+
+            //internal links
+            this.observer = new MutationObserver((mutations) => {
+                void this._handleHoverMutation(mutations);
+            });
+
+            this.registerEvent(this.app.workspace.on("hover-link", (event: unknown) => {
+                const hoverEvent = event as { linktext: string; sourcePath: string };
+                const linkText = hoverEvent.linktext;
+                if (!linkText) return;
+                const sourcePath = hoverEvent.sourcePath;
+
+                if (!linkText.endsWith(".puml") && !linkText.endsWith(".pu")) {
+                    return;
+                }
+
+                this.hover.linkText = linkText;
+                this.hover.sourcePath = sourcePath;
+            }));
+
+            this.observer.observe(activeDocument, {childList: true, subtree: true});
+        });
+    }
+
+    private async _handleHoverMutation(mutations: MutationRecord[]): Promise<void> {
+        if (mutations.length !== 1) return;
+        if (mutations[0].addedNodes.length !== 1) return;
+        if (this.hover.linkText === null) return;
+        //@ts-ignore
+        if (mutations[0].addedNodes[0].className !== "popover hover-popover file-embed is-loaded") return;
+
+        const file = this.app.metadataCache.getFirstLinkpathDest(this.hover.linkText, this.hover.sourcePath);
+        if (!file) return;
+        if (file.extension !== "puml" && file.extension !== "pu") return;
+
+        const fileContent = await this.app.vault.read(file);
+        const imgDiv = createDiv();
+        if(this.settings.defaultProcessor === "png") {
+            await this.getProcessor().png(fileContent, imgDiv, null);
+        }else {
+            await this.getProcessor().svg(fileContent, imgDiv, null);
         }
 
-        const processor = new DebouncedProcessors(this);
+        const node: Node = mutations[0].addedNodes[0];
+        node.empty();
 
-        addIcon("document-" + VIEW_TYPE, LOGO_SVG);
-        this.registerView(VIEW_TYPE, (leaf) => {
-            return new PumlView(leaf, this);
+        const div = createDiv("", (element) => {
+            element.appendChild(imgDiv);
+            element.setAttribute('src', file.path);
+            element.onClickEvent((event => {
+                event.stopImmediatePropagation();
+                const leaf = this.app.workspace.getLeaf(event.ctrlKey);
+                void leaf.setViewState({
+                    type: VIEW_TYPE,
+                    state: {file: file.path}
+                });
+            }));
         });
-        this.registerExtensions(["puml", "pu"], VIEW_TYPE);
-
-        this.registerMarkdownCodeBlockProcessor("plantuml", processor.default);
-        this.registerMarkdownCodeBlockProcessor("plantuml-png", processor.png);
-        this.registerMarkdownCodeBlockProcessor("plantuml-ascii", processor.ascii);
-        this.registerMarkdownCodeBlockProcessor("plantuml-svg", processor.svg);
-        this.registerMarkdownCodeBlockProcessor("puml", processor.default);
-        this.registerMarkdownCodeBlockProcessor("puml-png", processor.png);
-        this.registerMarkdownCodeBlockProcessor("puml-svg", processor.svg);
-        this.registerMarkdownCodeBlockProcessor("puml-ascii", processor.ascii);
-
-        //keep this processor for backwards compatibility
-        this.registerMarkdownCodeBlockProcessor("plantuml-map", processor.png);
-
-        this.app.embedRegistry.registerExtensions(['puml', 'pu'], (ctx, file, subpath) => new PumlEmbed(this, file, ctx));
-
-        this.cleanupLocalStorage();
-        localforage.config({
-            name: 'puml',
-            description: 'PlantUML plugin'
-        });
-        await this.cleanupCache();
-
-
-        //internal links
-        this.observer = new MutationObserver(async (mutation) => {
-            if (mutation.length !== 1) return;
-            if (mutation[0].addedNodes.length !== 1) return;
-            if (this.hover.linkText === null) return;
-            //@ts-ignore
-            if (mutation[0].addedNodes[0].className !== "popover hover-popover file-embed is-loaded") return;
-
-            const file = this.app.metadataCache.getFirstLinkpathDest(this.hover.linkText, this.hover.sourcePath);
-            if (!file) return;
-            if (file.extension !== "puml" && file.extension !== "pu") return;
-
-            const fileContent = await this.app.vault.read(file);
-            const imgDiv = createDiv();
-            if(this.settings.defaultProcessor === "png") {
-                await this.getProcessor().png(fileContent, imgDiv, null);
-            }else {
-                await this.getProcessor().svg(fileContent, imgDiv, null);
-            }
-
-            const node: Node = mutation[0].addedNodes[0];
-            node.empty();
-
-            const div = createDiv("", async (element) => {
-                element.appendChild(imgDiv);
-                element.setAttribute('src', file.path);
-                element.onClickEvent((event => {
-                    event.stopImmediatePropagation();
-                    const leaf = this.app.workspace.getLeaf(event.ctrlKey);
-                    leaf.setViewState({
-                        type: VIEW_TYPE,
-                        state: {file: file.path}
-                    })
-                }));
-            });
-            node.appendChild(div);
-
-        });
-
-        this.registerEvent(this.app.workspace.on("hover-link", async (event: any) => {
-            const linkText: string = event.linktext;
-            if (!linkText) return;
-            const sourcePath: string = event.sourcePath;
-
-            if (!linkText.endsWith(".puml") && !linkText.endsWith(".pu")) {
-                return;
-            }
-
-            this.hover.linkText = linkText;
-            this.hover.sourcePath = sourcePath;
-        }));
-
-        this.observer.observe(document, {childList: true, subtree: true});
+        node.appendChild(div);
     }
 
     async cleanupCache() {
@@ -166,10 +169,10 @@ export default class PlantumlPlugin extends Plugin {
             if(key.startsWith('ts-')) {
                 const encoded = key.split('-')[1];
                 if(value < new Date().getTime() - (this.settings.cache * 24 * 60 * 60 * 1000)) {
-                    localforage.removeItem('png-' + encoded);
-                    localforage.removeItem('svg-' + encoded);
-                    localforage.removeItem('map-' + encoded);
-                    localforage.removeItem('ascii-' + encoded);
+                    void localforage.removeItem('png-' + encoded);
+                    void localforage.removeItem('svg-' + encoded);
+                    void localforage.removeItem('map-' + encoded);
+                    void localforage.removeItem('ascii-' + encoded);
                 }
             }
         });
@@ -180,21 +183,20 @@ export default class PlantumlPlugin extends Plugin {
      * To fix issues with the local storage quota we have to clean this up when upgrading from a version that supported this.
      */
     cleanupLocalStorage() {
-        for (const key of Object.keys(localStorage)) {
+        for (const key of Object.keys(window.localStorage)) {
             if(key.endsWith('-map') || key.endsWith('-png') || key.endsWith('-svg') || key.endsWith('ascii')) {
-                localStorage.removeItem(key);
+                window.localStorage.removeItem(key);
             }
         }
     }
 
-    async onunload(): Promise<void> {
-        console.log('unloading plugin plantuml');
+    onunload(): void {
         this.observer.disconnect();
         this.app.embedRegistry.unregisterExtensions(['puml', 'pu']);
     }
 
     async loadSettings(): Promise<void> {
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<PlantUMLSettings>);
     }
 
     async saveSettings(): Promise<void> {

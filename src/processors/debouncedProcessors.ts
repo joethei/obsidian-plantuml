@@ -70,7 +70,6 @@ export class DebouncedProcessors implements Processor {
                             .setTitle('Copy diagram')
                             .setIcon('image')
                             .onClick(async () => {
-                                console.log(el);
                                 const img = el.querySelector('img');
                                 if (img) {
                                     this.renderToBlob(
@@ -141,7 +140,7 @@ export class DebouncedProcessors implements Processor {
         image.crossOrigin = 'anonymous';
         image.src = img.src;
         image.addEventListener('load', () => {
-            const canvas = document.createElement('canvas');
+            const canvas = activeDocument.createEl('canvas');
             canvas.width = image.width;
             canvas.height = image.height;
             const ctx = canvas.getContext('2d');
@@ -149,13 +148,11 @@ export class DebouncedProcessors implements Processor {
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(image, 0, 0);
             try {
-                canvas.toBlob(async (blob) => {
-                    try {
-                        await handleBlob(blob);
-                    } catch (error) {
+                canvas.toBlob((blob) => {
+                    if (!blob) return;
+                    handleBlob(blob).catch(() => {
                         new Notice(errorMessage);
-                        console.error(error);
-                    }
+                    });
                 });
             } catch (error) {
                 new Notice(errorMessage);
@@ -186,7 +183,7 @@ export class DebouncedProcessors implements Processor {
 
         const exists = await this.plugin.app.vault.adapter.exists(exportPath);
         if (!exists) {
-            this.plugin.app.vault.createFolder(exportPath);
+            await this.plugin.app.vault.createFolder(exportPath);
         }
 
         return exportPath;

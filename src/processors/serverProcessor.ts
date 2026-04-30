@@ -60,8 +60,8 @@ export class ServerProcessor implements Processor {
         const result = await request({url: asciiUrlBase + encodedDiagram});
 
         if (result.startsWith("�PNG")) {
-            const text = document.createElement("p");
-            text.style.color = "red";
+            const text = activeDocument.createEl("p");
+            text.addClass('mod-error')
             text.innerText = "Your configured PlantUML Server does not support ASCII Art";
             el.appendChild(text);
             return;

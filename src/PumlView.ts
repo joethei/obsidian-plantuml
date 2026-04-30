@@ -1,4 +1,4 @@
-import {debounce, Debouncer, Keymap, setIcon, TextFileView, ViewStateResult, WorkspaceLeaf} from "obsidian";
+import {debounce, Debouncer, Keymap, MarkdownPostProcessorContext, setIcon, TextFileView, ViewStateResult, WorkspaceLeaf} from "obsidian";
 import PlantumlPlugin from "./main";
 import {
     drawSelection,
@@ -36,6 +36,10 @@ function syncDispatch(from: number) {
     }
 }
 
+interface VaultWithConfig {
+    getConfig(key: string): unknown;
+}
+
 export class PumlView extends TextFileView {
     editor: EditorView;
     previewEl: HTMLElement;
@@ -44,7 +48,7 @@ export class PumlView extends TextFileView {
     currentView: 'source' | 'preview';
     plugin: PlantumlPlugin;
     dispatchId = -1;
-    debounced: Debouncer<any>;
+    debounced: Debouncer<[string, HTMLElement, MarkdownPostProcessorContext | null], void>;
 
     extensions: Extension[] = [
         highlightActiveLine(),
@@ -54,10 +58,10 @@ export class PumlView extends TextFileView {
         keymap.of([...defaultKeymap, indentWithTab]),
         history(),
         search(),
-        EditorView.updateListener.of(async v => {
+        EditorView.updateListener.of(v => {
             if(v.docChanged) {
                 this.requestSave();
-                await this.renderPreview();
+                void this.renderPreview();
             }
         })
     ]
@@ -71,7 +75,7 @@ export class PumlView extends TextFileView {
         this.sourceEl = this.contentEl.createDiv({cls: 'plantuml-source-view', attr: {'style': 'display: block'}});
         this.previewEl = this.contentEl.createDiv({cls: 'plantuml-preview-view', attr: {'style': 'display: none'}});
 
-        const vault = (this.app.vault as any);
+        const vault = this.app.vault as unknown as VaultWithConfig;
 
         if (vault.getConfig("showLineNumber")) {
             this.extensions.push(lineNumbers());
@@ -96,20 +100,20 @@ export class PumlView extends TextFileView {
         return VIEW_TYPE;
     }
 
-    getState(): any {
+    getState(): unknown {
         return super.getState();
     }
 
-    setState(state: any, result: ViewStateResult): Promise<void> {
+    setState(state: unknown, result: ViewStateResult): Promise<void> {
         // switch to preview mode
         if (state.mode === 'preview') {
             this.currentView = 'preview';
             setIcon(this.changeModeButton, 'pencil');
             this.changeModeButton.setAttribute('aria-label', 'Edit (Ctrl+Click to edit in new pane)');
 
-            this.previewEl.style.setProperty('display', 'block');
-            this.sourceEl.style.setProperty('display', 'none');
-            this.renderPreview();
+            this.previewEl.show();
+            this.sourceEl.hide();
+            void this.renderPreview();
         }
         // switch to source mode
         else {
@@ -117,20 +121,24 @@ export class PumlView extends TextFileView {
             setIcon(this.changeModeButton, 'lines-of-text');
             this.changeModeButton.setAttribute('aria-label', 'Preview (Ctrl+Click to open in new pane)');
 
-            this.previewEl.style.setProperty('display', 'none');
-            this.sourceEl.style.setProperty('display', 'block');
-            //this.editor.refresh();
+            this.previewEl.hide();
+            this.sourceEl.show();
         }
 
         return super.setState(state, result);
     }
 
-    async onload() {
+    onload(): void {
+        void this._onload();
+    }
+
+    private async _onload(): Promise<void> {
         // add the action to switch between source and preview mode
         this.changeModeButton = this.addAction('lines-of-text', 'Preview (Ctrl+Click to open in new pane)', (evt) => this.switchMode(evt), 17);
 
         // undocumented: Get the current default view mode to switch to
-        const defaultViewMode = (this.app.vault as any).getConfig('defaultViewMode');
+        const vault = this.app.vault as unknown as VaultWithConfig;
+        const defaultViewMode = vault.getConfig('defaultViewMode') as 'source' | 'preview';
         this.currentView = defaultViewMode;
         await this.setState({...this.getState(), mode: defaultViewMode}, {});
     }
@@ -148,15 +156,21 @@ export class PumlView extends TextFileView {
 
         if (arg instanceof MouseEvent) {
             if (Keymap.isModEvent(arg)) {
-                this.app.workspace.duplicateLeaf(this.leaf).then(async () => {
-                    const viewState = this.app.workspace.activeLeaf?.getViewState();
-                    if (viewState) {
-                        viewState.state = {...viewState.state, mode: mode};
-                        await this.app.workspace.activeLeaf?.setViewState(viewState);
+                const newLeaf = this.app.workspace.getLeaf('tab');
+                const currentState = this.getState();
+                void newLeaf.setViewState({
+                    type: VIEW_TYPE,
+                    state: {
+                        ...(typeof currentState === 'object' && currentState !== null ? currentState : {}),
+                        mode: mode
                     }
                 });
             } else {
-                await this.setState({...this.getState(), mode: mode}, {});
+                const currentState = this.getState();
+                await this.setState({
+                    ...(typeof currentState === 'object' && currentState !== null ? currentState : {}),
+                    mode: mode
+                }, {} as ViewStateResult);
             }
         }
     }
@@ -167,7 +181,7 @@ export class PumlView extends TextFileView {
     }
 
     // load the data into the view
-    async setViewData(data: string, clear: boolean) {
+    setViewData(data: string, clear: boolean): void {
         this.data = data;
          if (clear) {
              this.editor.setState(EditorState.create({
@@ -182,10 +196,10 @@ export class PumlView extends TextFileView {
                      to: this.editor.state.doc.length,
                      insert: data,
                  }
-             })
+             });
          }
         // if we're in preview view, also render that
-        if (this.currentView === 'preview') this.renderPreview();
+        if (this.currentView === 'preview') void this.renderPreview();
     }
 
     // clear the editor, etc

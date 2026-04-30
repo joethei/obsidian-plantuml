@@ -1,10 +1,8 @@
-/**
- * replace all non-breaking spaces with actual spaces
- * @param text
- * @param path
- */
-import {MarkdownPostProcessorContext} from "obsidian";
+import {FileSystemAdapter, MarkdownPostProcessorContext, TAbstractFile} from "obsidian";
 import PlantumlPlugin from "./main";
+
+interface VaultWithDirectParent { getDirectParent(file: TAbstractFile): { path: string } | null; }
+interface AppWithObsidianUrl { getObsidianUrl(file: unknown): string; }
 
 export class Replacer {
     plugin: PlantumlPlugin;
@@ -24,7 +22,7 @@ export class Replacer {
      * @param filetype
      */
     public replaceLinks(text: string, path: string, filetype: string) : string {
-        return text.replace(/\[\[\[([\s\S]*?)\]\]\]/g, ((_, args) => {
+        return text.replace(/\[\[\[([\s\S]*?)\]\]\]/g, ((_: string, args: string) => {
             const split = args.split("|");
             const file = this.plugin.app.metadataCache.getFirstLinkpathDest(split[0], path);
             if(!file) {
@@ -32,8 +30,7 @@ export class Replacer {
             }
             let alias = file.basename;
             if(filetype === "png") {
-                //@ts-ignore
-                const url = this.plugin.app.getObsidianUrl(file);
+                const url = (this.plugin.app as unknown as AppWithObsidianUrl).getObsidianUrl(file);
                 if (split[1]) {
                     alias = split[1];
                 }
@@ -47,25 +44,26 @@ export class Replacer {
      * get the absolute path on the users computer
      * @param path vault local path
      */
-    public getFullPath(path: string) {
+    public getFullPath(path: string): string {
+        if (!(this.plugin.app.vault.adapter instanceof FileSystemAdapter)) {
+            return;
+        }
+
         if (path.length === 0) {
-            //@ts-ignore
             return this.plugin.app.vault.adapter.getFullPath("");
         }
         const file = this.plugin.app.vault.getAbstractFileByPath(path);
 
         if(!file) {
-            //@ts-ignore
             return this.plugin.app.vault.adapter.getFullPath("");
         }
 
-        //@ts-ignore
-        const folder = this.plugin.app.vault.getDirectParent(file);
-        //@ts-ignore
-        return this.plugin.app.vault.adapter.getFullPath(folder.path);
+        const vault = this.plugin.app.vault as unknown as VaultWithDirectParent;
+        const folder = vault.getDirectParent(file);
+        return this.plugin.app.vault.adapter.getFullPath(folder?.path ?? "");
     }
 
-    public getPath(ctx: MarkdownPostProcessorContext) {
+    public getPath(ctx: MarkdownPostProcessorContext): string {
         return this.getFullPath(ctx ? ctx.sourcePath : '');
     }
 
@@ -74,7 +72,7 @@ export class Replacer {
 export function insertImageWithMap(el: HTMLElement, image: string, map: string, encodedDiagram: string) {
     el.empty();
 
-    const img = document.createElement("img");
+    const img = el.createEl("img");
     if(image.startsWith("http")) {
         img.src = image;
     }else {
@@ -83,21 +81,23 @@ export function insertImageWithMap(el: HTMLElement, image: string, map: string, 
     img.useMap = "#" + encodedDiagram;
 
     if (map.contains("map")) {
-        el.innerHTML = map;
-        el.children[0].setAttr("name", encodedDiagram);
+        const parser = new DOMParser();
+        const mapDoc = parser.parseFromString(map, 'text/html');
+        const mapEl = mapDoc.body.firstChild;
+        if (mapEl) {
+            const cloned = mapEl.cloneNode(true) as Element;
+            cloned.setAttr("name", encodedDiagram);
+            el.appendChild(cloned);
+        }
     }
-
-    el.appendChild(img);
 }
 
 export function insertAsciiImage(el: HTMLElement, image: string) {
     el.empty();
 
-    const pre = document.createElement("pre");
-    const code = document.createElement("code");
-    pre.appendChild(code);
+    const pre = el.createEl("pre");
+    const code = pre.createEl("code");
     code.setText(image);
-    el.appendChild(pre);
 }
 
 export function insertSvgImage(el: HTMLElement, image: string) {
@@ -112,7 +112,7 @@ export function insertSvgImage(el: HTMLElement, image: string) {
         link.addClass("internal-link");
     }
 
-    el.insertAdjacentHTML('beforeend', svg.documentElement.outerHTML);
+    el.appendChild(activeDocument.importNode(svg.documentElement, true));
 
 
 }
