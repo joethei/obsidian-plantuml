@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v2
 
       - name: Install modules
-        run: yarn
+        run: npm install
 
       - name: Lint
-        run: yarn run lint
+        run: npm run lint
