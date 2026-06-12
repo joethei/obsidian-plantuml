@@ -1,4 +1,4 @@
-import { Notice, Platform, PluginSettingTab, Setting } from "obsidian";
+import { Platform, PluginSettingTab, SettingDefinitionItem } from "obsidian";
 import PlantumlPlugin from "./main";
 
 export interface PlantUMLSettings {
@@ -33,141 +33,110 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
         this.plugin = plugin;
     }
 
-    display(): void {
-        const {containerEl} = this;
-
-        containerEl.empty();
-
-        new Setting(containerEl).setName("Server URL")
-            .setDesc("PlantUML Server URL")
-            .addText(text => text.setPlaceholder(DEFAULT_SETTINGS.server_url)
-                .setValue(this.plugin.settings.server_url)
-                .onChange(async (value) => {
-                        this.plugin.settings.server_url = value;
-                        await this.plugin.saveSettings();
-                    }
-                )
-            );
-
-        if(Platform.isDesktopApp) {
-
-            const jarDesc = new DocumentFragment();
-            const jarDescDiv = jarDesc.createDiv();
-            jarDescDiv.appendText("Path to local JAR");
-            jarDescDiv.createEl("br");
-            jarDescDiv.appendText("Supports:");
-            const jarDescList = jarDescDiv.createEl("ul");
-            jarDescList.createEl("li", {text: "Absolute path"});
-            jarDescList.createEl("li", {text: "Path relative to vault"});
-            const homeDirItem = jarDescList.createEl("li");
-            homeDirItem.appendText("Path relative to users home directory ");
-            homeDirItem.createEl("code", {text: "~/"});
-
-            new Setting(containerEl)
-                .setName("Local JAR")
-                .setDesc(jarDesc)
-                .addText(text => text.setPlaceholder(DEFAULT_SETTINGS.localJar)
-                    .setValue(this.plugin.settings.localJar)
-                    .onChange(async (value) => {
-                            this.plugin.settings.localJar = value;
-                            await this.plugin.saveSettings();
-                        }
-                    )
-                );
-
-            new Setting(containerEl)
-                .setName("Java path")
-                .setDesc("Path to Java executable")
-                .addText(text => text.setPlaceholder(DEFAULT_SETTINGS.javaPath)
-                    .setValue(this.plugin.settings.javaPath)
-                    .onChange(async (value) => {
-                            this.plugin.settings.javaPath = value;
-                            await this.plugin.saveSettings();
-                        }
-                    )
-                );
-
-            new Setting(containerEl)
-                .setName("Dot path")
-                .setDesc("Path to dot executable")
-                .addText(text => text.setPlaceholder(DEFAULT_SETTINGS.dotPath)
-                    .setValue(this.plugin.settings.dotPath)
-                    .onChange(async (value) => {
-                            this.plugin.settings.dotPath = value;
-                            await this.plugin.saveSettings();
-                        }
-                    )
-                );
-
-            new Setting(containerEl)
-                .setName("Diagram export path")
-                .setDesc("Path where exported diagrams will be saved relative to the vault root. Leave blank to save along side the note.")
-                .addText(text => text.setPlaceholder(DEFAULT_SETTINGS.exportPath)
-                    .setValue(this.plugin.settings.exportPath)
-                    .onChange(async (value) => {
-                            this.plugin.settings.exportPath = value;
-                            await this.plugin.saveSettings();
-                        }
-                    )
-                );
-        }
-
-        new Setting(containerEl)
-            .setName("Default processor for includes")
-            .setDesc("Any .pu/.puml files linked will use this processor")
-            .addDropdown(dropdown => {
-               dropdown
-                   .addOption("png", "PNG")
-                   .addOption("svg", "SVG")
-                   .setValue(this.plugin.settings.defaultProcessor)
-                   .onChange(async(value) => {
-                      this.plugin.settings.defaultProcessor = value;
-                      await this.plugin.saveSettings();
-                   });
-            });
-
-        new Setting(containerEl).setName("Header")
-            .setDesc("Included at the head in every diagram. Useful for specifying a common theme (.puml file)")
-            .addTextArea(text => {
-                    text.setPlaceholder("!include https://raw.githubusercontent.com/....puml\n")
-                        .setValue(this.plugin.settings.header)
-                        .onChange(async (value) => {
-                                this.plugin.settings.header = value;
-                                await this.plugin.saveSettings();
-                            }
-                        )
-                    text.inputEl.setAttr("rows", 4);
-                    text.inputEl.addClass("puml-settings-area")
+    getSettingDefinitions(): SettingDefinitionItem[] {
+        return [
+            {
+                name: 'Server URL',
+                desc: 'PlantUML server URL',
+                control: {
+                    type: 'text',
+                    key: 'server_url',
+                    placeholder: DEFAULT_SETTINGS.server_url,
+                    defaultValue: DEFAULT_SETTINGS.server_url,
                 }
-            );
-
-        new Setting(containerEl)
-            .setName('Cache')
-            .setDesc('in days. Only applicable when generating diagrams locally')
-            .addSlider(slider => {
-                slider
-                    .setLimits(10, 360, 10)
-                    .setValue(this.plugin.settings.cache)
-                    .setDynamicTooltip()
-                    .onChange(async value => {
-                        this.plugin.settings.cache = value;
-                        await this.plugin.saveSettings();
-                    })
-            });
-
-        new Setting(containerEl)
-            .setName("Debounce")
-            .setDesc("How often should the diagram refresh in seconds")
-            .addText(text => text.setPlaceholder(String(DEFAULT_SETTINGS.debounce))
-                .setValue(String(this.plugin.settings.debounce))
-                .onChange(async (value) => {
-                    //make sure that there is always some value defined, or reset to default
-                    if (!isNaN(Number(value)) || value === undefined) {
-                        this.plugin.settings.debounce = Number(value || DEFAULT_SETTINGS.debounce);
-                        await this.plugin.saveSettings();
-                    } else {
-                        new Notice("Please specify a valid number");
+            },
+            {
+                type: 'group',
+                heading: 'Local rendering',
+                visible: () => Platform.isDesktopApp,
+                items: [
+                    {
+                        name: 'Local JAR',
+                        desc: 'Path to local JAR file. Supports absolute paths, paths relative to the vault, and paths relative to the home directory (~/).',
+                        control: {
+                            type: 'text',
+                            key: 'localJar',
+                        }
+                    },
+                    {
+                        name: 'Java path',
+                        desc: 'Path to Java executable.',
+                        control: {
+                            type: 'text',
+                            key: 'javaPath',
+                            placeholder: DEFAULT_SETTINGS.javaPath,
+                            defaultValue: DEFAULT_SETTINGS.javaPath,
+                        }
+                    },
+                    {
+                        name: 'Dot path',
+                        desc: 'Path to dot executable.',
+                        control: {
+                            type: 'text',
+                            key: 'dotPath',
+                            placeholder: DEFAULT_SETTINGS.dotPath,
+                            defaultValue: DEFAULT_SETTINGS.dotPath,
+                        }
+                    },
+                    {
+                        name: 'Diagram export path',
+                        desc: 'Path where exported diagrams will be saved relative to the vault root. Leave blank to save alongside the note.',
+                        control: {
+                            type: 'text',
+                            key: 'exportPath',
+                        }
+                    },
+                ]
+            },
+            {
+                name: 'Default processor for includes',
+                desc: 'Any .pu/.puml files linked will use this processor.',
+                control: {
+                    type: 'dropdown',
+                    key: 'defaultProcessor',
+                    defaultValue: DEFAULT_SETTINGS.defaultProcessor,
+                    options: {
+                        png: 'PNG',
+                        svg: 'SVG',
                     }
-                }));
+                }
+            },
+            {
+                name: 'Header',
+                desc: 'Included at the head of every diagram. Useful for specifying a common theme.',
+                control: {
+                    type: 'textarea',
+                    key: 'header',
+                    placeholder: '!include https://raw.githubusercontent.com/....puml\n',
+                    rows: 4,
+                }
+            },
+            {
+                name: 'Cache',
+                desc: 'How long to cache locally generated diagrams, in days.',
+                control: {
+                    type: 'slider',
+                    key: 'cache',
+                    min: 10,
+                    max: 360,
+                    step: 10,
+                    defaultValue: DEFAULT_SETTINGS.cache,
+                }
+            },
+            {
+                name: 'Debounce',
+                desc: 'How often the diagram refreshes while editing, in seconds.',
+                control: {
+                    type: 'number',
+                    key: 'debounce',
+                    min: 1,
+                    step: 1,
+                    defaultValue: DEFAULT_SETTINGS.debounce,
+                    validate: (value: number) => {
+                        if (!Number.isFinite(value) || value < 1) return 'Must be a positive number.';
+                    }
+                }
+            },
+        ];
     }
 }
