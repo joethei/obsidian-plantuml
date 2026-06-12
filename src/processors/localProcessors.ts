@@ -6,16 +6,16 @@ import {insertAsciiImage, insertImageWithMap, insertSvgImage} from "../functions
 import {OutputType} from "../const";
 import {DiagramCacheEntry, parseIncludedFiles} from "../cache";
 
-let exec: typeof import('child_process').exec;
+let execFile: typeof import('child_process').execFile;
 let Buffer: typeof import('buffer').Buffer;
 let pathModule: typeof import('path');
 let osModule: typeof import('os');
 
 async function loadNodeModules() {
-    if (Platform.isDesktop && !exec) {
+    if (Platform.isDesktop && !execFile) {
         // Obsidian shadows `require` with its own resolver; window.require is Electron's Node.js require
         const nodeRequire = (window as Window & {require: (id: string) => unknown}).require;
-        exec = (nodeRequire('child_process') as typeof import('child_process')).exec;
+        execFile = (nodeRequire('child_process') as typeof import('child_process')).execFile;
         Buffer = (nodeRequire('buffer') as typeof import('buffer')).Buffer;
         pathModule = nodeRequire('path') as typeof import('path');
         osModule = nodeRequire('os') as typeof import('os');
@@ -108,8 +108,8 @@ export class LocalProcessors implements Processor {
             throw new Error('Local processing is only available on desktop');
         }
 
-        const args = await this.resolveLocalJarCmd();
-        const child = exec(args.concat(['-pipemap']).join(" "), {encoding: 'binary', cwd: path});
+        const {cmd, args} = await this.resolveLocalJarCmd();
+        const child = execFile(cmd, args.concat(['-pipemap']), {encoding: 'binary', cwd: path});
 
         let stdout = "";
 
@@ -144,10 +144,10 @@ export class LocalProcessors implements Processor {
             throw new Error('Local processing is only available on desktop');
         }
 
-        const args = await this.resolveLocalJarCmd();
+        const {cmd, args} = await this.resolveLocalJarCmd();
         const cmdArgs = args.concat(['-t' + type, '-pipe']);
 
-        const child = exec(cmdArgs.join(" "), {
+        const child = execFile(cmd, cmdArgs, {
             encoding: type === OutputType.PNG ? 'binary' : 'utf-8',
             cwd: path
         });
@@ -201,7 +201,7 @@ export class LocalProcessors implements Processor {
      * To support local jar settings with unix-like style, and search local jar file
      * from current vault path.
      */
-    private async resolveLocalJarCmd(): Promise<string[]> {
+    private async resolveLocalJarCmd(): Promise<{cmd: string, args: string[]}> {
         if (!Platform.isDesktop) {
             throw new Error('Local processing is only available on desktop');
         }
@@ -238,16 +238,18 @@ export class LocalProcessors implements Processor {
             dotPath = osModule.userInfo().homedir + dotPath.slice(1);
         }
         const graphvizArgs = dotPath
-            ? ['-graphvizdot', '"' + dotPath + '"']
+            ? ['-graphvizdot', dotPath]
             : [];
 
         if(jarFullPath.endsWith('.jar')) {
-            return [
-                javaPath, '-Djava.awt.headless=true', '-Dapple.awt.UIElement=true', '-jar', '"' + jarFullPath + '"', '-charset', 'utf-8', ...graphvizArgs
-            ];
+            return {
+                cmd: javaPath,
+                args: ['-Djava.awt.headless=true', '-Dapple.awt.UIElement=true', '-jar', jarFullPath, '-charset', 'utf-8', ...graphvizArgs]
+            };
         }
-        return [
-            jarFullPath, '-Djava.awt.headless=true', '-Dapple.awt.UIElement=true', '-charset', 'utf-8', ...graphvizArgs
-        ];
+        return {
+            cmd: jarFullPath,
+            args: ['-Djava.awt.headless=true', '-Dapple.awt.UIElement=true', '-charset', 'utf-8', ...graphvizArgs]
+        };
     }
 }
