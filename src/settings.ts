@@ -21,7 +21,7 @@ export const DEFAULT_SETTINGS: PlantUMLSettings = {
     debounce: 3,
     localJar: '',
     javaPath: 'java',
-    dotPath: 'dot',
+    dotPath: '',
     defaultProcessor: "png",
     cache: 60,
     exportPath: '',
@@ -74,11 +74,11 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
                     },
                     {
                         name: 'Dot path',
-                        desc: 'Path to dot executable.',
+                        desc: 'Path to dot (Graphviz) executable. Leave blank to use version included in PlantUML.',
                         control: {
                             type: 'text',
                             key: 'dotPath',
-                            placeholder: DEFAULT_SETTINGS.dotPath,
+                            placeholder: 'dot',
                             defaultValue: DEFAULT_SETTINGS.dotPath,
                         }
                     },

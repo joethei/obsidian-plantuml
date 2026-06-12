@@ -223,13 +223,17 @@ export class LocalProcessors implements Processor {
             throw Error('Invalid local jar file');
         }
 
+        const graphvizArgs = this.plugin.settings.dotPath
+            ? ['-graphvizdot', '"' + this.plugin.settings.dotPath + '"']
+            : [];
+
         if(jarFullPath.endsWith('.jar')) {
             return [
-                this.plugin.settings.javaPath, '-Djava.awt.headless=true', '-Dapple.awt.UIElement=true', '-jar', '"' + jarFullPath + '"', '-charset', 'utf-8', '-graphvizdot', '"' + this.plugin.settings.dotPath + '"'
+                this.plugin.settings.javaPath, '-Djava.awt.headless=true', '-Dapple.awt.UIElement=true', '-jar', '"' + jarFullPath + '"', '-charset', 'utf-8', ...graphvizArgs
             ];
         }
         return [
-            jarFullPath, '-Djava.awt.headless=true', '-Dapple.awt.UIElement=true', '-charset', 'utf-8', '-graphvizdot', '"' + this.plugin.settings.dotPath + '"'
+            jarFullPath, '-Djava.awt.headless=true', '-Dapple.awt.UIElement=true', '-charset', 'utf-8', ...graphvizArgs
         ];
     }
 }
