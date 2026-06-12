@@ -52,7 +52,10 @@ export class DebouncedProcessors implements Processor {
 
             source = this.plugin.replacer.decodeWhiteSpaces(source);
             source = this.plugin.replacer.replaceLinks(source, this.plugin.replacer.getPath(ctx), filetype);
-            source = this.plugin.settings.header + "\r\n" + source;
+            const themeHeader = activeDocument.body.hasClass('theme-dark')
+                ? this.plugin.settings.darkHeader
+                : this.plugin.settings.lightHeader;
+            source = this.plugin.settings.header + "\r\n" + themeHeader + "\r\n" + source;
             await processor(source, el, ctx);
             el.addEventListener('contextmenu', (event) => {
 

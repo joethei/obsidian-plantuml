@@ -11,6 +11,8 @@ export interface PlantUMLSettings {
     defaultProcessor: string;
     cache: number;
     exportPath: string;
+    lightHeader: string;
+    darkHeader: string;
 }
 
 export const DEFAULT_SETTINGS: PlantUMLSettings = {
@@ -22,7 +24,9 @@ export const DEFAULT_SETTINGS: PlantUMLSettings = {
     dotPath: 'dot',
     defaultProcessor: "png",
     cache: 60,
-    exportPath: ''
+    exportPath: '',
+    lightHeader: '',
+    darkHeader: '',
 }
 
 export class PlantUMLSettingsTab extends PluginSettingTab {
@@ -112,30 +116,54 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
                 }
             },
             {
-                name: 'Cache',
-                desc: 'How long to cache locally generated diagrams, in days.',
+                name: 'Light mode header',
+                desc: 'Prepended to every diagram when in light mode.',
                 control: {
-                    type: 'slider',
-                    key: 'cache',
-                    min: 10,
-                    max: 360,
-                    step: 10,
-                    defaultValue: DEFAULT_SETTINGS.cache,
+                    type: 'textarea',
+                    key: 'lightHeader',
+                    rows: 3,
                 }
             },
             {
-                name: 'Debounce',
-                desc: 'How often the diagram refreshes while editing, in seconds.',
+                name: 'Dark mode header',
+                desc: 'Prepended to every diagram when in dark mode.',
                 control: {
-                    type: 'number',
-                    key: 'debounce',
-                    min: 1,
-                    step: 1,
-                    defaultValue: DEFAULT_SETTINGS.debounce,
-                    validate: (value: number) => {
-                        if (!Number.isFinite(value) || value < 1) return 'Must be a positive number.';
-                    }
+                    type: 'textarea',
+                    key: 'darkHeader',
+                    rows: 3,
                 }
+            },
+            {
+                type: 'group',
+                heading: 'Advanced',
+                items: [
+                    {
+                        name: 'Cache',
+                        desc: 'How long to cache locally generated diagrams, in days.',
+                        control: {
+                            type: 'slider',
+                            key: 'cache',
+                            min: 10,
+                            max: 360,
+                            step: 10,
+                            defaultValue: DEFAULT_SETTINGS.cache,
+                        }
+                    },
+                    {
+                        name: 'Debounce',
+                        desc: 'How often the diagram refreshes while editing, in seconds.',
+                        control: {
+                            type: 'number',
+                            key: 'debounce',
+                            min: 1,
+                            step: 1,
+                            defaultValue: DEFAULT_SETTINGS.debounce,
+                            validate: (value: number) => {
+                                if (!Number.isFinite(value) || value < 1) return 'Must be a positive number.';
+                            }
+                        }
+                    },
+                ]
             },
         ];
     }

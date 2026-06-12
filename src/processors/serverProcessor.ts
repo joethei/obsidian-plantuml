@@ -12,14 +12,17 @@ export class ServerProcessor implements Processor {
         this.plugin = plugin;
     }
 
-    svg = async(source: string, el: HTMLElement, _: MarkdownPostProcessorContext) => {
-        //make sure url is defined. once the setting gets reset to default, an empty string will be returned by settings
-        let url = this.plugin.settings.server_url;
-        if (url.length == 0) {
-            url = DEFAULT_SETTINGS.server_url;
-        }
+    private getUrl(): string {
+        const url = this.plugin.settings.server_url;
+        return url.length > 0 ? url : DEFAULT_SETTINGS.server_url;
+    }
 
-        const imageUrlBase = url + "/svg/";
+    private isDark(): boolean {
+        return activeDocument.body.hasClass('theme-dark');
+    }
+
+    svg = async(source: string, el: HTMLElement, _: MarkdownPostProcessorContext) => {
+        const imageUrlBase = this.getUrl() + (this.isDark() ? "/dsvg/" : "/svg/");
         const encodedDiagram = plantuml.encode(source);
 
         request({url: imageUrlBase + encodedDiagram, method: 'GET'}).then((value: string) => {
@@ -31,13 +34,8 @@ export class ServerProcessor implements Processor {
     };
 
     png = async(source: string, el: HTMLElement, _: MarkdownPostProcessorContext) => {
-        //make sure url is defined. once the setting gets reset to default, an empty string will be returned by settings
-        let url = this.plugin.settings.server_url;
-        if (url.length == 0) {
-            url = DEFAULT_SETTINGS.server_url;
-        }
-
-        const imageUrlBase = url + "/png/";
+        const url = this.getUrl();
+        const imageUrlBase = url + (this.isDark() ? "/dpng/" : "/png/");
 
         const encodedDiagram = plantuml.encode(source);
         const image = imageUrlBase + encodedDiagram;
@@ -48,13 +46,9 @@ export class ServerProcessor implements Processor {
 
         insertImageWithMap(el, image, map, encodedDiagram);
     }
+
     ascii = async(source: string, el: HTMLElement, _: MarkdownPostProcessorContext) => {
-        //make sure url is defined, once the setting gets reset to default, an empty string will be returned by settings
-        let url = this.plugin.settings.server_url;
-        if (url.length == 0) {
-            url = DEFAULT_SETTINGS.server_url;
-        }
-        const asciiUrlBase = url + "/txt/";
+        const asciiUrlBase = this.getUrl() + (this.isDark() ? "/dtxt/" : "/txt/");
         const encodedDiagram = plantuml.encode(source);
 
         const result = await request({url: asciiUrlBase + encodedDiagram});
