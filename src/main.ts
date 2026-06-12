@@ -1,5 +1,5 @@
 import {
-    addIcon, Component, EventRef, Events, Platform,
+    addIcon, Component, EventRef, Events, Notice, Platform,
     Plugin, TFile
 } from 'obsidian';
 import {DEFAULT_SETTINGS, PlantUMLSettings, PlantUMLSettingsTab} from "./settings";
@@ -97,6 +97,14 @@ export default class PlantumlPlugin extends Plugin {
 
             this.app.embedRegistry.registerExtensions(['puml', 'pu'], (ctx, file, _subpath) => new PumlEmbed(this, file, ctx));
 
+            this.addCommand({
+                id: 'clear-cache',
+                name: 'Clear diagram cache',
+                callback: async () => {
+                    await this.clearCache();
+                }
+            });
+
             this.cleanupLocalStorage();
             localforage.config({
                 name: 'puml',
@@ -176,6 +184,11 @@ export default class PlantumlPlugin extends Plugin {
                 }
             }
         });
+    }
+
+    async clearCache() {
+        await localforage.clear();
+        new Notice("Cache cleared");
     }
 
     /*

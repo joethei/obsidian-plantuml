@@ -1,4 +1,4 @@
-import { Platform, PluginSettingTab, SettingDefinitionItem } from "obsidian";
+import { Notice, Platform, PluginSettingTab, SettingDefinitionItem } from "obsidian";
 import PlantumlPlugin from "./main";
 
 export interface PlantUMLSettings {
@@ -148,6 +148,18 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
                             step: 10,
                             defaultValue: DEFAULT_SETTINGS.cache,
                         }
+                    },
+                    {
+                        name: 'Clear diagram cache',
+                        desc: 'Remove all cached diagrams and force a re-render on next view.',
+                        render: (setting) => {
+                            setting.addButton(btn => btn
+                                .setButtonText('Clear cache')
+                                .onClick(async () => {
+                                    await this.plugin.clearCache();
+                                })
+                            );
+                        },
                     },
                     {
                         name: 'Debounce',
