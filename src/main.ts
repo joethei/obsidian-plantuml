@@ -1,8 +1,9 @@
 import {
-    addIcon, Component, EventRef, Events, Notice, Platform,
-    Plugin, TFile
+    addIcon, Component, EventRef, Events, MarkdownView, Platform,
+    Plugin, TAbstractFile, TFile
 } from 'obsidian';
 import {DEFAULT_SETTINGS, PlantUMLSettings, PlantUMLSettingsTab} from "./settings";
+import {DiagramCache} from "./cache";
 import {LocalProcessors} from "./processors/localProcessors";
 import {DebouncedProcessors} from "./processors/debouncedProcessors";
 import {LOGO_SVG} from "./const";
@@ -40,6 +41,7 @@ declare module "obsidian" {
 
 export default class PlantumlPlugin extends Plugin {
     settings: PlantUMLSettings;
+    cache: DiagramCache;
 
     serverProcessor: Processor;
     localProcessor: Processor;
@@ -69,6 +71,7 @@ export default class PlantumlPlugin extends Plugin {
         void this.loadSettings().then(async () => {
             this.addSettingTab(new PlantUMLSettingsTab(this));
             this.replacer = new Replacer(this);
+            this.cache = new DiagramCache();
 
             this.serverProcessor = new ServerProcessor(this);
             if (Platform.isDesktopApp) {
@@ -100,17 +103,15 @@ export default class PlantumlPlugin extends Plugin {
             this.addCommand({
                 id: 'clear-cache',
                 name: 'Clear diagram cache',
-                callback: async () => {
-                    await this.clearCache();
-                }
+                callback: () => void this.cache.clear(true),
             });
 
-            this.cleanupLocalStorage();
             localforage.config({
                 name: 'puml',
                 description: 'PlantUML plugin'
             });
-            await this.cleanupCache();
+            await this.cache.migrateFromV1();
+            await this.cache.evictExpired(this.settings.cache);
 
             //internal links
             this.observer = new MutationObserver((mutations) => {
@@ -129,6 +130,18 @@ export default class PlantumlPlugin extends Plugin {
 
                 this.hover.linkText = linkText;
                 this.hover.sourcePath = sourcePath;
+            }));
+
+            this.registerEvent(this.app.vault.on('modify', (file: TAbstractFile) => {
+                if (file instanceof TFile && (file.extension === 'puml' || file.extension === 'pu')) {
+                    void this.cache.evictForFile(file.name).then(() => {
+                        this.app.workspace.getLeavesOfType('markdown').forEach(leaf => {
+                            if (leaf.view instanceof MarkdownView) {
+                                leaf.view.previewMode.rerender(true);
+                            }
+                        });
+                    });
+                }
             }));
 
             this.observer.observe(activeDocument, {childList: true, subtree: true});
@@ -170,37 +183,6 @@ export default class PlantumlPlugin extends Plugin {
             }));
         });
         node.appendChild(div);
-    }
-
-    async cleanupCache() {
-        await localforage.iterate((value, key) => {
-            if(key.startsWith('ts-')) {
-                const encoded = key.split('-')[1];
-                if(value < new Date().getTime() - (this.settings.cache * 24 * 60 * 60 * 1000)) {
-                    void localforage.removeItem('png-' + encoded);
-                    void localforage.removeItem('svg-' + encoded);
-                    void localforage.removeItem('map-' + encoded);
-                    void localforage.removeItem('ascii-' + encoded);
-                }
-            }
-        });
-    }
-
-    async clearCache() {
-        await localforage.clear();
-        new Notice("Cache cleared");
-    }
-
-    /*
-     * older versions used to store generated images in local storage when using local generation.
-     * To fix issues with the local storage quota we have to clean this up when upgrading from a version that supported this.
-     */
-    cleanupLocalStorage() {
-        for (const key of Object.keys(window.localStorage)) {
-            if(key.endsWith('-map') || key.endsWith('-png') || key.endsWith('-svg') || key.endsWith('ascii')) {
-                window.localStorage.removeItem(key);
-            }
-        }
     }
 
     onunload(): void {

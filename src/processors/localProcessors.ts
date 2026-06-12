@@ -4,7 +4,7 @@ import {MarkdownPostProcessorContext, Platform} from "obsidian";
 import * as plantuml from "plantuml-encoder";
 import {insertAsciiImage, insertImageWithMap, insertSvgImage} from "../functions";
 import {OutputType} from "../const";
-import * as localforage from "localforage";
+import {DiagramCacheEntry, parseIncludedFiles} from "../cache";
 
 let exec: typeof import('child_process').exec;
 let Buffer: typeof import('buffer').Buffer;
@@ -37,18 +37,20 @@ export class LocalProcessors implements Processor {
 
         await loadNodeModules();
 
-        const encodedDiagram = plantuml.encode(source);
-        const item: string = await localforage.getItem('ascii-' + encodedDiagram);
-        if(item) {
-            insertAsciiImage(el, item);
-            await localforage.setItem('ts-' + encodedDiagram, Date.now());
+        const encoded = plantuml.encode(source);
+        const cached = await this.plugin.cache.get(encoded);
+
+        if (cached?.ascii !== undefined) {
+            insertAsciiImage(el, cached.ascii);
+            await this.plugin.cache.set(encoded, { ...cached, ts: Date.now() });
             return;
         }
 
         const image = await this.generateLocalImage(source, OutputType.ASCII, this.plugin.replacer.getPath(ctx));
+        const includes = parseIncludedFiles(source);
+        const entry: DiagramCacheEntry = { ts: Date.now(), ascii: image, includes, ...cached && { png: cached.png, svg: cached.svg, map: cached.map } };
+        await this.plugin.cache.set(encoded, entry);
         insertAsciiImage(el, image);
-        await localforage.setItem('ascii-' + encodedDiagram, image);
-        await localforage.setItem('ts-' + encodedDiagram, Date.now());
     }
 
     png = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
@@ -58,24 +60,24 @@ export class LocalProcessors implements Processor {
 
         await loadNodeModules();
 
-        const encodedDiagram = plantuml.encode(source);
-        const item: string = await localforage.getItem('png-' + encodedDiagram);
-        if(item) {
-            const map: string = await localforage.getItem('map-' + encodedDiagram);
-            insertImageWithMap(el, item , map, encodedDiagram);
-            await localforage.setItem('ts-' + encodedDiagram, Date.now());
+        const encoded = plantuml.encode(source);
+        const cached = await this.plugin.cache.get(encoded);
+
+        if (cached?.png !== undefined) {
+            insertImageWithMap(el, cached.png, cached.map ?? '', encoded);
+            await this.plugin.cache.set(encoded, { ...cached, ts: Date.now() });
             return;
         }
 
         const path = this.plugin.replacer.getPath(ctx);
-        const image = await this.generateLocalImage(source, OutputType.PNG, path);
-        const map = await this.generateLocalMap(source, path);
-
-        await localforage.setItem('png-' + encodedDiagram, image);
-        await localforage.setItem('map-' + encodedDiagram, map);
-        await localforage.setItem('ts-'+ encodedDiagram, Date.now());
-
-        insertImageWithMap(el, image, map, encodedDiagram);
+        const [image, map] = await Promise.all([
+            this.generateLocalImage(source, OutputType.PNG, path),
+            this.generateLocalMap(source, path),
+        ]);
+        const includes = parseIncludedFiles(source);
+        const entry: DiagramCacheEntry = { ts: Date.now(), png: image, map, includes, ...cached && { svg: cached.svg, ascii: cached.ascii } };
+        await this.plugin.cache.set(encoded, entry);
+        insertImageWithMap(el, image, map, encoded);
     }
 
     svg = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
@@ -85,16 +87,19 @@ export class LocalProcessors implements Processor {
 
         await loadNodeModules();
 
-        const encodedDiagram = plantuml.encode(source);
-        const item: string = await localforage.getItem('svg-' + encodedDiagram);
-        if(item) {
-            insertSvgImage(el, item);
-            await localforage.setItem('ts-' + encodedDiagram, Date.now());
+        const encoded = plantuml.encode(source);
+        const cached = await this.plugin.cache.get(encoded);
+
+        if (cached?.svg !== undefined) {
+            insertSvgImage(el, cached.svg);
+            await this.plugin.cache.set(encoded, { ...cached, ts: Date.now() });
             return;
         }
+
         const image = await this.generateLocalImage(source, OutputType.SVG, this.plugin.replacer.getPath(ctx));
-        await localforage.setItem('svg-' + encodedDiagram, image);
-        await localforage.setItem('ts-' + encodedDiagram, Date.now());
+        const includes = parseIncludedFiles(source);
+        const entry: DiagramCacheEntry = { ts: Date.now(), svg: image, includes, ...cached && { png: cached.png, map: cached.map, ascii: cached.ascii } };
+        await this.plugin.cache.set(encoded, entry);
         insertSvgImage(el, image);
     }
 

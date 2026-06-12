@@ -1,4 +1,4 @@
-import { Notice, Platform, PluginSettingTab, SettingDefinitionItem } from "obsidian";
+import { Platform, PluginSettingTab, SettingDefinitionItem } from "obsidian";
 import PlantumlPlugin from "./main";
 
 export interface PlantUMLSettings {
@@ -156,7 +156,7 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
                             setting.addButton(btn => btn
                                 .setButtonText('Clear cache')
                                 .onClick(async () => {
-                                    await this.plugin.clearCache();
+                                  await this.plugin.cache.clear(true);
                                 })
                             );
                         },
