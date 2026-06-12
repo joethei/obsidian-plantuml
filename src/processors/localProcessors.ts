@@ -223,13 +223,22 @@ export class LocalProcessors implements Processor {
             throw Error('Invalid local jar file');
         }
 
-        const graphvizArgs = this.plugin.settings.dotPath
-            ? ['-graphvizdot', '"' + this.plugin.settings.dotPath + '"']
+        let javaPath = this.plugin.settings.javaPath;
+        if (javaPath[0] === '~') {
+            javaPath = osModule.userInfo().homedir + javaPath.slice(1);
+        }
+
+        let dotPath = this.plugin.settings.dotPath;
+        if (dotPath[0] === '~') {
+            dotPath = osModule.userInfo().homedir + dotPath.slice(1);
+        }
+        const graphvizArgs = dotPath
+            ? ['-graphvizdot', '"' + dotPath + '"']
             : [];
 
         if(jarFullPath.endsWith('.jar')) {
             return [
-                this.plugin.settings.javaPath, '-Djava.awt.headless=true', '-Dapple.awt.UIElement=true', '-jar', '"' + jarFullPath + '"', '-charset', 'utf-8', ...graphvizArgs
+                javaPath, '-Djava.awt.headless=true', '-Dapple.awt.UIElement=true', '-jar', '"' + jarFullPath + '"', '-charset', 'utf-8', ...graphvizArgs
             ];
         }
         return [

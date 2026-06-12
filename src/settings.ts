@@ -64,7 +64,7 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
                     },
                     {
                         name: 'Java path',
-                        desc: 'Path to Java executable.',
+                        desc: 'Path to Java executable. Supports absolute paths and paths relative to the home directory (~/).',
                         control: {
                             type: 'text',
                             key: 'javaPath',
@@ -74,7 +74,7 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
                     },
                     {
                         name: 'Dot path',
-                        desc: 'Path to dot (Graphviz) executable. Leave blank to use version included in PlantUML.',
+                        desc: 'Path to dot (Graphviz) executable. Supports absolute paths and paths relative to the home directory (~/). Leave blank to use version included in PlantUML.',
                         control: {
                             type: 'text',
                             key: 'dotPath',
