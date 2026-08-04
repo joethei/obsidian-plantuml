@@ -1,5 +1,5 @@
 import {
-    addIcon, Component, EventRef, Events, MarkdownView, Platform,
+    addIcon, Component, EventRef, Events, MarkdownView,
     Plugin, TAbstractFile, TFile
 } from 'obsidian';
 import {DEFAULT_SETTINGS, PlantUMLSettings, PlantUMLSettingsTab} from "./settings";
@@ -8,7 +8,6 @@ import {LocalProcessors} from "./processors/localProcessors";
 import {DebouncedProcessors} from "./processors/debouncedProcessors";
 import {LOGO_SVG} from "./const";
 import {Processor} from "./processors/processor";
-import {ServerProcessor} from "./processors/serverProcessor";
 import {Replacer} from "./functions";
 import {PumlView, VIEW_TYPE} from "./PumlView";
 import localforage from "localforage";
@@ -43,7 +42,6 @@ export default class PlantumlPlugin extends Plugin {
     settings: PlantUMLSettings;
     cache: DiagramCache;
 
-    serverProcessor: Processor;
     localProcessor: Processor;
     replacer: Replacer;
 
@@ -58,13 +56,7 @@ export default class PlantumlPlugin extends Plugin {
     };
 
     getProcessor(): Processor {
-        if (Platform.isMobileApp) {
-            return this.serverProcessor;
-        }
-        if (this.settings.localJar.length > 0) {
-            return this.localProcessor;
-        }
-        return this.serverProcessor;
+        return this.localProcessor;
     }
 
     onload(): void {
@@ -73,10 +65,7 @@ export default class PlantumlPlugin extends Plugin {
             this.replacer = new Replacer(this);
             this.cache = new DiagramCache();
 
-            this.serverProcessor = new ServerProcessor(this);
-            if (Platform.isDesktopApp) {
-                this.localProcessor = new LocalProcessors(this);
-            }
+            this.localProcessor = new LocalProcessors(this);
 
             const processor = new DebouncedProcessors(this);
 

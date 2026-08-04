@@ -2,7 +2,6 @@ import { Platform, PluginSettingTab, SettingDefinitionItem } from "obsidian";
 import PlantumlPlugin from "./main";
 
 export interface PlantUMLSettings {
-    server_url: string,
     header: string;
     debounce: number;
     localJar: string;
@@ -16,7 +15,6 @@ export interface PlantUMLSettings {
 }
 
 export const DEFAULT_SETTINGS: PlantUMLSettings = {
-    server_url: 'https://www.plantuml.com/plantuml',
     header: '',
     debounce: 3,
     localJar: '',
@@ -39,16 +37,6 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
 
     getSettingDefinitions(): SettingDefinitionItem[] {
         return [
-            {
-                name: 'Server URL',
-                desc: 'PlantUML server URL',
-                control: {
-                    type: 'text',
-                    key: 'server_url',
-                    placeholder: DEFAULT_SETTINGS.server_url,
-                    defaultValue: DEFAULT_SETTINGS.server_url,
-                }
-            },
             {
                 type: 'group',
                 heading: 'Local rendering',
