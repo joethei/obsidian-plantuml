@@ -3,6 +3,7 @@ import PlantumlPlugin from "./main";
 
 export interface PlantUMLSettings {
     server_url: string,
+    docker_server: boolean;
     header: string;
     debounce: number;
     localJar: string;
@@ -17,6 +18,7 @@ export interface PlantUMLSettings {
 
 export const DEFAULT_SETTINGS: PlantUMLSettings = {
     server_url: 'https://www.plantuml.com/plantuml',
+    docker_server: false,
     header: '',
     debounce: 3,
     localJar: '',
@@ -40,14 +42,29 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
     getSettingDefinitions(): SettingDefinitionItem[] {
         return [
             {
-                name: 'Server URL',
-                desc: 'PlantUML server URL',
-                control: {
-                    type: 'text',
-                    key: 'server_url',
-                    placeholder: DEFAULT_SETTINGS.server_url,
-                    defaultValue: DEFAULT_SETTINGS.server_url,
-                }
+                type: 'group',
+                heading: 'Server rendering',
+                items: [
+                    {
+                        name: 'Server URL',
+                        desc: 'PlantUML server URL',
+                        control: {
+                            type: 'text',
+                            key: 'server_url',
+                            placeholder: DEFAULT_SETTINGS.server_url,
+                            defaultValue: DEFAULT_SETTINGS.server_url,
+                        }
+                    },
+                    {
+                        name: 'Docker server',
+                        desc: 'Check if the PlantUML server is a Docker deployment. This will disable dark mode endpoints.',
+                        control: {
+                            type: 'toggle',
+                            key: 'docker_server',
+                            defaultValue: DEFAULT_SETTINGS.docker_server,
+                        }
+                    }
+                ]
             },
             {
                 type: 'group',
