@@ -67,6 +67,13 @@ export class Replacer {
 
 }
 
+/**
+ * whether a link target is an url with a scheme (https:, mailto:, obsidian:, ...) instead of a note in the vault
+ */
+function isExternalUrl(href: string): boolean {
+    return /^[a-z][a-z0-9+.-]*:/i.test(href);
+}
+
 export function insertImageWithMap(el: HTMLElement, image: string, map: string, encodedDiagram: string) {
     el.empty();
 
@@ -107,7 +114,14 @@ export function insertSvgImage(el: HTMLElement, image: string) {
     const links = svg.getElementsByTagName("a");
     for (let i = 0; i < links.length; i++) {
         const link = links[i];
-        link.addClass("internal-link");
+        const href = link.getAttribute("href") ?? link.getAttributeNS("http://www.w3.org/1999/xlink", "href") ?? "";
+        if (isExternalUrl(href)) {
+            link.addClass("external-link");
+            link.setAttr("target", "_blank");
+            link.setAttr("rel", "noopener");
+        } else {
+            link.addClass("internal-link");
+        }
     }
 
     el.appendChild(activeDocument.importNode(svg.documentElement, true));
