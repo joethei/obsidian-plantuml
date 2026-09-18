@@ -208,3 +208,11 @@ export function insertSvgImage(el: HTMLElement, image: string) {
 export function serializeSvg(svg: SVGElement): string {
     return new XMLSerializer().serializeToString(svg);
 }
+
+export function insertErrorMessage(el: HTMLElement, error: unknown) {
+    el.empty();
+
+    const container = el.createDiv({cls: "puml-error"});
+    container.createEl("p", {text: "PlantUML diagram could not be rendered", cls: "mod-error"});
+    container.createEl("pre").createEl("code", {text: error instanceof Error ? error.message : `${error as string}`});
+}

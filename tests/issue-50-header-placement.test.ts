@@ -100,6 +100,7 @@ function fakeExecFile(_cmd: string, args: string[]) {
         stdout: new EventEmitter(),
         stderr: new EventEmitter(),
         stdin: {
+            on: vi.fn(),
             write: vi.fn(),
             end: () => setTimeout(() => {
                 const result = args.includes("-pipemap") ? {stdout: ""} : jarResults.shift() ?? {stdout: ""};
@@ -119,6 +120,8 @@ describe("issue #46: output of the local jar", () => {
             buffer: nodeBuffer,
             path: nodePath,
             os: nodeOs,
+            // the jar is checked for existence before java is started
+            fs: {promises: {access: async () => undefined}},
         };
         (window as unknown as {require: (id: string) => unknown}).require = (id: string) => modules[id];
     });

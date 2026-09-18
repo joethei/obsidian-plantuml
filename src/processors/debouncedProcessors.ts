@@ -1,7 +1,7 @@
 import { debounce, Debouncer, HoverParent, Keymap, Menu, Notice, TFile } from "obsidian";
 import PlantumlPlugin from "../main";
 import { Processor, ProcessorContext } from "./processor";
-import { getInternalLinkText, serializeSvg } from "../functions";
+import { getInternalLinkText, insertErrorMessage, serializeSvg } from "../functions";
 
 export class DebouncedProcessors implements Processor {
 
@@ -51,11 +51,20 @@ export class DebouncedProcessors implements Processor {
         const state = {originalSource, source, ctx};
         this.renderStates.set(el, state);
 
+        const render = async (source: string, el: HTMLElement, ctx: ProcessorContext) => {
+            try {
+                await processor(source, el, ctx);
+            } catch (error) {
+                console.error("PlantUML: failed to render diagram", error);
+                insertErrorMessage(el, error);
+            }
+        };
+
         if (isRerender) {
             this.debouncers.get(el)?.(source, el, ctx);
         } else {
-            this.debouncers.set(el, debounce(processor, this.debounceTime, true));
-            await processor(source, el, ctx);
+            this.debouncers.set(el, debounce(render, this.debounceTime, true));
+            await render(source, el, ctx);
             this.registerLinkHandlers(el);
             el.addEventListener('contextmenu', (event) => {
                 const {originalSource, source, ctx} = this.renderStates.get(el) ?? state;
