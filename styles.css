@@ -41,3 +41,41 @@
     max-width: 100%;
     height: auto !important;
 }
+
+.plantuml-svg-lightbox-trigger {
+    position: fixed;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.lightbox.plantuml-svg-lightbox .lightbox-content .media-wrapper {
+    position: relative;
+}
+
+.lightbox.plantuml-svg-lightbox .plantuml-svg-lightbox-native {
+    opacity: 0;
+}
+
+.lightbox.plantuml-svg-lightbox .plantuml-svg-lightbox-inline {
+    position: absolute;
+    display: block;
+    max-width: none;
+    max-height: none;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.lightbox.plantuml-svg-lightbox .plantuml-svg-lightbox-inline :is(text, tspan, textPath, a, a *) {
+    pointer-events: auto;
+}
+
+.lightbox.plantuml-svg-lightbox .plantuml-svg-lightbox-inline :is(text, tspan, textPath) {
+    user-select: text;
+    -webkit-user-select: text;
+    cursor: text;
+}
+
+.lightbox.plantuml-svg-lightbox .plantuml-svg-lightbox-inline a {
+    cursor: pointer;
+}
