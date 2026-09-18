@@ -17,12 +17,12 @@ export class ServerProcessor implements Processor {
         return url.length > 0 ? url : DEFAULT_SETTINGS.server_url;
     }
 
-    private isDark(): boolean {
-        return activeDocument.body.hasClass('theme-dark');
+    private useDarkEndpoints(): boolean {
+        return this.plugin.settings.darkModeEndpoints && activeDocument.body.hasClass('theme-dark');
     }
 
     svg = async(source: string, el: HTMLElement, _: ProcessorContext) => {
-        const imageUrlBase = this.getUrl() + (this.isDark() ? "/dsvg/" : "/svg/");
+        const imageUrlBase = this.getUrl() + (this.useDarkEndpoints() ? "/dsvg/" : "/svg/");
         const encodedDiagram = plantuml.encode(source);
 
         request({url: imageUrlBase + encodedDiagram, method: 'GET'}).then((value: string) => {
@@ -35,7 +35,7 @@ export class ServerProcessor implements Processor {
 
     png = async(source: string, el: HTMLElement, _: ProcessorContext) => {
         const url = this.getUrl();
-        const imageUrlBase = url + (this.isDark() ? "/dpng/" : "/png/");
+        const imageUrlBase = url + (this.useDarkEndpoints() ? "/dpng/" : "/png/");
 
         const encodedDiagram = plantuml.encode(source);
         const image = imageUrlBase + encodedDiagram;
@@ -48,7 +48,7 @@ export class ServerProcessor implements Processor {
     }
 
     ascii = async(source: string, el: HTMLElement, _: ProcessorContext) => {
-        const asciiUrlBase = this.getUrl() + (this.isDark() ? "/dtxt/" : "/txt/");
+        const asciiUrlBase = this.getUrl() + "/txt/";
         const encodedDiagram = plantuml.encode(source);
 
         const result = await request({url: asciiUrlBase + encodedDiagram});

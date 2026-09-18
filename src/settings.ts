@@ -3,6 +3,7 @@ import PlantumlPlugin from "./main";
 
 export interface PlantUMLSettings {
     server_url: string,
+    darkModeEndpoints: boolean;
     header: string;
     debounce: number;
     localJar: string;
@@ -17,6 +18,7 @@ export interface PlantUMLSettings {
 
 export const DEFAULT_SETTINGS: PlantUMLSettings = {
     server_url: 'https://www.plantuml.com/plantuml',
+    darkModeEndpoints: true,
     header: '',
     debounce: 3,
     localJar: '',
@@ -47,6 +49,15 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
                     key: 'server_url',
                     placeholder: DEFAULT_SETTINGS.server_url,
                     defaultValue: DEFAULT_SETTINGS.server_url,
+                }
+            },
+            {
+                name: 'Server supports dark mode endpoints',
+                desc: 'Render diagrams in dark mode via the /dpng/ and /dsvg/ endpoints when a dark theme is active. Turn this off for servers without them, like the PicoWeb server or plantuml-server before v1.2026.8. The dark mode header is applied either way.',
+                control: {
+                    type: 'toggle',
+                    key: 'darkModeEndpoints',
+                    defaultValue: DEFAULT_SETTINGS.darkModeEndpoints,
                 }
             },
             {
