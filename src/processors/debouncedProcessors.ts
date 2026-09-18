@@ -72,7 +72,7 @@ export class DebouncedProcessors implements Processor {
                             .setTitle('Copy diagram')
                             .setIcon('image')
                             .onClick(async () => {
-                                const img = el.querySelector('img');
+                                const {img, svg, code} = this.getDiagram(el, filetype);
                                 if (img) {
                                     this.renderToBlob(
                                         img,
@@ -87,12 +87,10 @@ export class DebouncedProcessors implements Processor {
                                         });
                                 }
 
-                                const svg = el.querySelector('svg');
                                 if (svg) {
                                     await navigator.clipboard.writeText(svg.outerHTML.replace(/&nbsp;/g, ''));
                                     new Notice('Diagram copied to clipboard');
                                 }
-                                const code = el.querySelector('code');
                                 if (code) {
                                     await navigator.clipboard.writeText(code.innerText);
                                     new Notice('Diagram copied to clipboard');
@@ -104,8 +102,7 @@ export class DebouncedProcessors implements Processor {
                             .setTitle('Export diagram')
                             .setIcon('image-file')
                             .onClick(async () => {
-                                const img = el.querySelector('img');
-
+                                const {img, svg, code} = this.getDiagram(el, filetype);
                                 if (img) {
                                     this.renderToBlob(img, 'An error occurred while exporting the diagram', async (blob) => {
                                         const filename = await this.getFilePath(source, ctx, 'png');
@@ -121,12 +118,10 @@ export class DebouncedProcessors implements Processor {
                                     });
                                 }
 
-                                const svg = el.querySelector('svg');
                                 if (svg) {
                                     await this.saveTextFile(source, ctx, 'svg', svg.outerHTML);
                                 }
 
-                                const code = el.querySelector('code');
                                 if (code) {
                                     await this.saveTextFile(source, ctx, 'txt', code.innerText);
                                 }
@@ -137,12 +132,24 @@ export class DebouncedProcessors implements Processor {
         }
     }
 
+    /**
+     * only the element the processor rendered for the given filetype,
+     * other elements in the block (e.g. icons added by Obsidian or other plugins) are ignored
+     */
+    getDiagram = (el: HTMLElement, filetype: string) => {
+        return {
+            img: filetype === 'png' ? el.querySelector<HTMLImageElement>(':scope > img') : null,
+            svg: filetype === 'svg' ? el.querySelector<SVGSVGElement>(':scope > svg') : null,
+            code: filetype === 'ascii' ? el.querySelector<HTMLElement>(':scope > pre > code') : null,
+        };
+    }
+
     renderToBlob = (img: HTMLImageElement, errorMessage: string, handleBlob: (blob: Blob) => Promise<void>) => {
         const image = new Image();
         image.crossOrigin = 'anonymous';
         image.src = img.src;
         image.addEventListener('load', () => {
-            const canvas = activeDocument.createEl('canvas');
+            const canvas = createEl('canvas');
             canvas.width = image.width;
             canvas.height = image.height;
             const ctx = canvas.getContext('2d');
