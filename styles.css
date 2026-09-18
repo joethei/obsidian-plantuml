@@ -36,3 +36,8 @@
 .puml-error {
     color: var(--text-error);
 }
+
+.puml-svg {
+    max-width: 100%;
+    height: auto !important;
+}

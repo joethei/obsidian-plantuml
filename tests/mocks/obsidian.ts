@@ -257,3 +257,36 @@ export function parseLinktext(linktext: string): {path: string, subpath: string}
 export function normalizePath(path: string): string {
     return path.replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\/|\/$/g, "");
 }
+
+/** jsdom has no ResizeObserver, Obsidian (Electron) does; tests can trigger observers via `ResizeObserver.instances` */
+class ResizeObserverStub {
+    static instances: ResizeObserverStub[] = [];
+    targets: Element[] = [];
+
+    constructor(public callback: () => void) {
+        ResizeObserverStub.instances.push(this);
+    }
+
+    observe(target: Element) {
+        this.targets.push(target);
+    }
+
+    unobserve(target: Element) {
+        this.targets = this.targets.filter(t => t !== target);
+    }
+
+    disconnect() {
+        this.targets = [];
+    }
+
+    /** simulate a resize of the observed elements */
+    trigger() {
+        this.callback();
+    }
+}
+
+const globalScope = globalThis as unknown as {ResizeObserver?: unknown};
+if (!globalScope.ResizeObserver) {
+    globalScope.ResizeObserver = ResizeObserverStub;
+}
+export {ResizeObserverStub};

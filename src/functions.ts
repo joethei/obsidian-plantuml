@@ -110,8 +110,31 @@ export function insertImageWithMap(el: HTMLElement, image: string, map: string, 
             const cloned = mapEl.cloneNode(true) as Element;
             cloned.setAttr("name", encodedDiagram);
             el.appendChild(cloned);
+            scaleImageMap(img, cloned);
         }
     }
+}
+
+/**
+ * image map coordinates are in pixels of the original image,
+ * keep them in sync with the size the image is actually displayed at
+ * @param img the image the map belongs to
+ * @param map the map element
+ */
+function scaleImageMap(img: HTMLImageElement, map: Element) {
+    const areas = Array.from(map.querySelectorAll("area"));
+    const coords = areas.map(area => area.getAttribute("coords") ?? "");
+
+    const scale = () => {
+        if (!img.naturalWidth || !img.width) return;
+        const factor = img.width / img.naturalWidth;
+        areas.forEach((area, i) => {
+            area.setAttr("coords", coords[i].split(",").map(coord => Math.round(parseFloat(coord) * factor)).join(","));
+        });
+    };
+
+    img.addEventListener("load", scale);
+    new ResizeObserver(scale).observe(img);
 }
 
 export function insertAsciiImage(el: HTMLElement, image: string) {
@@ -141,9 +164,9 @@ export function insertSvgImage(el: HTMLElement, image: string) {
         }
     }
 
-    el.appendChild(activeDocument.importNode(svg.documentElement, true));
-
-
+    const svgEl = activeDocument.importNode(svg.documentElement, true);
+    svgEl.addClass("puml-svg");
+    el.appendChild(svgEl);
 }
 
 /**
