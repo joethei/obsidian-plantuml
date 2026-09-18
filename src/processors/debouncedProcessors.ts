@@ -1,13 +1,14 @@
-import { debounce, Debouncer, MarkdownPostProcessorContext, Menu, Notice, TFile } from "obsidian";
-import { v4 as uuidv4 } from "uuid";
+import { debounce, Debouncer, Menu, Notice, TFile } from "obsidian";
 import PlantumlPlugin from "../main";
-import { Processor } from "./processor";
+import { Processor, ProcessorContext } from "./processor";
 
 export class DebouncedProcessors implements Processor {
 
     SECONDS_TO_MS_FACTOR = 1000;
 
-    debounceMap = new Map<string, Debouncer<[string, HTMLElement, MarkdownPostProcessorContext], unknown>>();
+    // keyed by the element the diagram is rendered into, so that re-rendering the same element is debounced
+    debouncers = new WeakMap<HTMLElement, Debouncer<[string, HTMLElement, ProcessorContext], unknown>>();
+    renderStates = new WeakMap<HTMLElement, {originalSource: string, source: string, ctx: ProcessorContext}>();
 
     debounceTime: number;
     plugin: PlantumlPlugin;
@@ -18,46 +19,44 @@ export class DebouncedProcessors implements Processor {
         this.debounceTime = debounceTime * this.SECONDS_TO_MS_FACTOR;
     }
 
-    default = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+    default = async(source: string, el: HTMLElement, ctx: ProcessorContext) => {
         await this.png(source, el, ctx);
     }
 
-    png = async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+    png = async (source: string, el: HTMLElement, ctx: ProcessorContext) => {
         await this.processor(source, el, ctx, "png", this.plugin.getProcessor().png);
     }
 
-    ascii = async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+    ascii = async (source: string, el: HTMLElement, ctx: ProcessorContext) => {
         await this.processor(source, el, ctx, "ascii", this.plugin.getProcessor().ascii);
     }
 
-    svg = async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+    svg = async (source: string, el: HTMLElement, ctx: ProcessorContext) => {
         await this.processor(source, el, ctx, "svg", this.plugin.getProcessor().svg);
     }
 
-    processor = async (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext, filetype: string, processor: (source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => Promise<void>) => {
-        const originalSource = source;
+    processor = async (originalSource: string, el: HTMLElement, ctx: ProcessorContext, filetype: string, processor: (source: string, el: HTMLElement, ctx: ProcessorContext) => Promise<void>) => {
         el.dataset.filetype = filetype;
         el.createEl("h6", {text: "Generating PlantUML diagram", cls: "puml-loading"});
 
-        if (el.dataset.plantumlDebounce) {
-            const debounceId = el.dataset.plantumlDebounce;
-            if (this.debounceMap.has(debounceId)) {
-                this.debounceMap.get(debounceId)(source, el, ctx);
-            }
-        } else {
-            const func = debounce(processor, this.debounceTime, true);
-            const uuid = uuidv4();
-            el.dataset.plantumlDebouce = uuid;
-            this.debounceMap.set(uuid, func);
+        let source = this.plugin.replacer.decodeWhiteSpaces(originalSource);
+        source = this.plugin.replacer.replaceLinks(source, ctx?.sourcePath ?? '', filetype);
+        const themeHeader = activeDocument.body.hasClass('theme-dark')
+            ? this.plugin.settings.darkHeader
+            : this.plugin.settings.lightHeader;
+        source = this.plugin.settings.header + "\r\n" + themeHeader + "\r\n" + source;
 
-            source = this.plugin.replacer.decodeWhiteSpaces(source);
-            source = this.plugin.replacer.replaceLinks(source, this.plugin.replacer.getPath(ctx), filetype);
-            const themeHeader = activeDocument.body.hasClass('theme-dark')
-                ? this.plugin.settings.darkHeader
-                : this.plugin.settings.lightHeader;
-            source = this.plugin.settings.header + "\r\n" + themeHeader + "\r\n" + source;
+        const isRerender = this.renderStates.has(el);
+        const state = {originalSource, source, ctx};
+        this.renderStates.set(el, state);
+
+        if (isRerender) {
+            this.debouncers.get(el)?.(source, el, ctx);
+        } else {
+            this.debouncers.set(el, debounce(processor, this.debounceTime, true));
             await processor(source, el, ctx);
             el.addEventListener('contextmenu', (event) => {
+                const {originalSource, source, ctx} = this.renderStates.get(el) ?? state;
 
                 const menu = new Menu()
                     .addItem(item => {
@@ -164,7 +163,7 @@ export class DebouncedProcessors implements Processor {
         });
     }
 
-    getFilename = (source: string, ctx: MarkdownPostProcessorContext) => {
+    getFilename = (source: string, ctx: ProcessorContext) => {
         // try extract the title of the diagram
         const startuml = source.match(/@startuml (.+)/i);
         if (startuml?.length >= 2) {
@@ -176,7 +175,7 @@ export class DebouncedProcessors implements Processor {
         return `${filename.substring(0, filename.lastIndexOf('.'))}-${now.substring(0, now.lastIndexOf('.'))}`;
     }
 
-    getFolder = async (ctx: MarkdownPostProcessorContext) => {
+    getFolder = async (ctx: ProcessorContext) => {
         let exportPath = this.plugin.settings.exportPath;
         if (!exportPath.startsWith('/')) {
             // relative to the document
@@ -192,7 +191,7 @@ export class DebouncedProcessors implements Processor {
         return exportPath;
     }
 
-    getFilePath = async (source: string, ctx: MarkdownPostProcessorContext, type: string) => {
+    getFilePath = async (source: string, ctx: ProcessorContext, type: string) => {
 
         const filename = this.getFilename(source, ctx);
         const path = await this.getFolder(ctx);
@@ -216,7 +215,7 @@ export class DebouncedProcessors implements Processor {
         return undefined;
     }
 
-    saveTextFile = async (source: string, ctx: MarkdownPostProcessorContext, type: string, data: string) => {
+    saveTextFile = async (source: string, ctx: ProcessorContext, type: string, data: string) => {
         try {
             const filename = await this.getFilePath(source, ctx, type);
             const file = this.getFile(filename);

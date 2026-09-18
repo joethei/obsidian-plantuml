@@ -1,5 +1,6 @@
-import {FileSystemAdapter, MarkdownPostProcessorContext, TAbstractFile} from "obsidian";
+import {FileSystemAdapter, TAbstractFile} from "obsidian";
 import PlantumlPlugin from "./main";
+import {ProcessorContext} from "./processors/processor";
 
 interface VaultWithDirectParent { getDirectParent(file: TAbstractFile): { path: string } | null; }
 interface AppWithObsidianUrl { getObsidianUrl(file: unknown): string; }
@@ -18,25 +19,22 @@ export class Replacer {
     /**
      * replace all links in the plugin syntax with valid plantuml links to note inside the vault
      * @param text the text, in which to replace all links
-     * @param path path of the current file
+     * @param sourcePath vault path of the file containing the diagram
      * @param filetype
      */
-    public replaceLinks(text: string, path: string, filetype: string) : string {
+    public replaceLinks(text: string, sourcePath: string, filetype: string) : string {
         return text.replace(/\[\[\[([\s\S]*?)\]\]\]/g, ((_: string, args: string) => {
             const split = args.split("|");
-            const file = this.plugin.app.metadataCache.getFirstLinkpathDest(split[0], path);
-            if(!file) {
-                return "File with name: " + split[0] + " not found";
-            }
-            let alias = file.basename;
+            const linkText = split[0];
+            const file = this.plugin.app.metadataCache.getFirstLinkpathDest(linkText, sourcePath);
             if(filetype === "png") {
-                const url = (this.plugin.app as unknown as AppWithObsidianUrl).getObsidianUrl(file);
-                if (split[1]) {
-                    alias = split[1];
-                }
+                const url = file
+                    ? (this.plugin.app as unknown as AppWithObsidianUrl).getObsidianUrl(file)
+                    : "obsidian://new?vault=" + encodeURIComponent(this.plugin.app.vault.getName()) + "&file=" + encodeURIComponent(linkText);
+                const alias = split[1] || (file ? file.basename : linkText);
                 return "[[" + url + " " + alias + "]]";
             }
-            return "[[" + file.basename + "]]";
+            return "[[" + (file ? file.basename : linkText) + "]]";
         }));
     }
 
@@ -63,7 +61,7 @@ export class Replacer {
         return this.plugin.app.vault.adapter.getFullPath(folder?.path ?? "");
     }
 
-    public getPath(ctx: MarkdownPostProcessorContext): string {
+    public getPath(ctx: ProcessorContext): string {
         return this.getFullPath(ctx ? ctx.sourcePath : '');
     }
 

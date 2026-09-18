@@ -1,8 +1,8 @@
-import {MarkdownPostProcessorContext, request} from "obsidian";
+import {request} from "obsidian";
 import {DEFAULT_SETTINGS} from "../settings";
 import * as plantuml from "plantuml-encoder";
 import PlantumlPlugin from "../main";
-import {Processor} from "./processor";
+import {Processor, ProcessorContext} from "./processor";
 import {insertAsciiImage, insertImageWithMap, insertSvgImage} from "../functions";
 
 export class ServerProcessor implements Processor {
@@ -21,7 +21,7 @@ export class ServerProcessor implements Processor {
         return activeDocument.body.hasClass('theme-dark');
     }
 
-    svg = async(source: string, el: HTMLElement, _: MarkdownPostProcessorContext) => {
+    svg = async(source: string, el: HTMLElement, _: ProcessorContext) => {
         const imageUrlBase = this.getUrl() + (this.isDark() ? "/dsvg/" : "/svg/");
         const encodedDiagram = plantuml.encode(source);
 
@@ -33,7 +33,7 @@ export class ServerProcessor implements Processor {
         });
     };
 
-    png = async(source: string, el: HTMLElement, _: MarkdownPostProcessorContext) => {
+    png = async(source: string, el: HTMLElement, _: ProcessorContext) => {
         const url = this.getUrl();
         const imageUrlBase = url + (this.isDark() ? "/dpng/" : "/png/");
 
@@ -47,7 +47,7 @@ export class ServerProcessor implements Processor {
         insertImageWithMap(el, image, map, encodedDiagram);
     }
 
-    ascii = async(source: string, el: HTMLElement, _: MarkdownPostProcessorContext) => {
+    ascii = async(source: string, el: HTMLElement, _: ProcessorContext) => {
         const asciiUrlBase = this.getUrl() + (this.isDark() ? "/dtxt/" : "/txt/");
         const encodedDiagram = plantuml.encode(source);
 
