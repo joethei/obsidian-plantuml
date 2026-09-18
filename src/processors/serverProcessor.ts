@@ -1,4 +1,4 @@
-import {request} from "obsidian";
+import {request, requestUrl} from "obsidian";
 import {DEFAULT_SETTINGS} from "../settings";
 import * as plantuml from "plantuml-encoder";
 import PlantumlPlugin from "../main";
@@ -21,16 +21,37 @@ export class ServerProcessor implements Processor {
         return activeDocument.body.hasClass('theme-dark');
     }
 
+    private insertError(el: HTMLElement, message: string) {
+        el.empty();
+        const text = el.createEl("p", {text: message});
+        text.addClass('mod-error');
+    }
+
+    // the server answers diagrams containing errors with a 400 and a rendering of the error, so keep the body
+    private async getText(url: string): Promise<string> {
+        const response = await requestUrl({url, method: 'GET', throw: false});
+        return response.text;
+    }
+
     svg = async(source: string, el: HTMLElement, _: ProcessorContext) => {
         const imageUrlBase = this.getUrl() + (this.isDark() ? "/dsvg/" : "/svg/");
         const encodedDiagram = plantuml.encode(source);
 
-        request({url: imageUrlBase + encodedDiagram, method: 'GET'}).then((value: string) => {
-            insertSvgImage(el, value);
-        }).catch((error: Error) => {
-            if (error)
-                console.error(error);
-        });
+        let result: string;
+        try {
+            result = await this.getText(imageUrlBase + encodedDiagram);
+        } catch (error) {
+            console.error(error);
+            this.insertError(el, "Could not reach the PlantUML server");
+            return;
+        }
+
+        if (!result.contains("<svg")) {
+            this.insertError(el, "The PlantUML server did not return a diagram");
+            return;
+        }
+
+        insertSvgImage(el, result);
     };
 
     png = async(source: string, el: HTMLElement, _: ProcessorContext) => {
@@ -42,7 +63,14 @@ export class ServerProcessor implements Processor {
 
         //get image map data to support clicking links in diagrams
         const mapUrlBase = url + "/map/";
-        const map = await request({url: mapUrlBase + encodedDiagram, method: "GET"});
+        let map: string;
+        try {
+            map = await request({url: mapUrlBase + encodedDiagram, method: "GET"});
+        } catch (error) {
+            console.error(error);
+            this.insertError(el, "Could not reach the PlantUML server");
+            return;
+        }
 
         insertImageWithMap(el, image, map, encodedDiagram);
     }
@@ -51,13 +79,17 @@ export class ServerProcessor implements Processor {
         const asciiUrlBase = this.getUrl() + (this.isDark() ? "/dtxt/" : "/txt/");
         const encodedDiagram = plantuml.encode(source);
 
-        const result = await request({url: asciiUrlBase + encodedDiagram});
+        let result: string;
+        try {
+            result = await this.getText(asciiUrlBase + encodedDiagram);
+        } catch (error) {
+            console.error(error);
+            this.insertError(el, "Could not reach the PlantUML server");
+            return;
+        }
 
         if (result.startsWith("�PNG")) {
-            const text = activeDocument.createEl("p");
-            text.addClass('mod-error')
-            text.innerText = "Your configured PlantUML Server does not support ASCII Art";
-            el.appendChild(text);
+            this.insertError(el, "Your configured PlantUML Server does not support ASCII Art");
             return;
         }
 
