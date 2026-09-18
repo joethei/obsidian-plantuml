@@ -88,11 +88,11 @@ export default class PlantumlPlugin extends Plugin {
             });
             this.registerExtensions(["puml", "pu"], VIEW_TYPE);
 
-            this.registerMarkdownCodeBlockProcessor("plantuml", processor.default);
+            this.registerMarkdownCodeBlockProcessor("plantuml", processor.codeBlock);
             this.registerMarkdownCodeBlockProcessor("plantuml-png", processor.png);
             this.registerMarkdownCodeBlockProcessor("plantuml-ascii", processor.ascii);
             this.registerMarkdownCodeBlockProcessor("plantuml-svg", processor.svg);
-            this.registerMarkdownCodeBlockProcessor("puml", processor.default);
+            this.registerMarkdownCodeBlockProcessor("puml", processor.codeBlock);
             this.registerMarkdownCodeBlockProcessor("puml-png", processor.png);
             this.registerMarkdownCodeBlockProcessor("puml-svg", processor.svg);
             this.registerMarkdownCodeBlockProcessor("puml-ascii", processor.ascii);
@@ -163,11 +163,7 @@ export default class PlantumlPlugin extends Plugin {
 
         const fileContent = await this.app.vault.read(file);
         const imgDiv = createDiv();
-        if(this.settings.defaultProcessor === "png") {
-            await this.debouncedProcessor.png(fileContent, imgDiv, {sourcePath: file.path});
-        }else {
-            await this.debouncedProcessor.svg(fileContent, imgDiv, {sourcePath: file.path});
-        }
+        await this.debouncedProcessor.default(fileContent, imgDiv, {sourcePath: file.path});
 
         const node: Node = mutations[0].addedNodes[0];
         node.empty();
