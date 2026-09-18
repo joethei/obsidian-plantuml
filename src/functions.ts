@@ -17,6 +17,23 @@ export class Replacer {
     }
 
     /**
+     * add the header lines to the diagram, PlantUML ignores everything before `@startxxx`,
+     * so they are inserted after it, or at the top if the diagram does not have a start tag.
+     * @param text the diagram source
+     * @param headers the headers to insert, empty ones are skipped
+     */
+    public insertHeaders(text: string, ...headers: string[]): string {
+        const header = headers.filter(value => value.trim().length > 0).join("\n");
+        if (header.length === 0) {
+            return text;
+        }
+        if (!/^[ \t]*@start/m.test(text)) {
+            return header + "\n" + text;
+        }
+        return text.replace(/^[ \t]*@start.*$/gm, (start: string) => start + "\n" + header);
+    }
+
+    /**
      * replace all links in the plugin syntax with valid plantuml links to note inside the vault
      * @param text the text, in which to replace all links
      * @param sourcePath vault path of the file containing the diagram

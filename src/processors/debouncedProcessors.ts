@@ -44,7 +44,7 @@ export class DebouncedProcessors implements Processor {
         const themeHeader = activeDocument.body.hasClass('theme-dark')
             ? this.plugin.settings.darkHeader
             : this.plugin.settings.lightHeader;
-        source = this.plugin.settings.header + "\r\n" + themeHeader + "\r\n" + source;
+        source = this.plugin.replacer.insertHeaders(source, this.plugin.settings.header, themeHeader);
 
         const isRerender = this.renderStates.has(el);
         const state = {originalSource, source, ctx};
