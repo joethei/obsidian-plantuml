@@ -1,7 +1,7 @@
-import { debounce, Debouncer, Menu, Notice, TFile } from "obsidian";
+import { debounce, Debouncer, HoverParent, Keymap, Menu, Notice, TFile } from "obsidian";
 import PlantumlPlugin from "../main";
 import { Processor, ProcessorContext } from "./processor";
-import { serializeSvg } from "../functions";
+import { getInternalLinkText, serializeSvg } from "../functions";
 
 export class DebouncedProcessors implements Processor {
 
@@ -56,6 +56,7 @@ export class DebouncedProcessors implements Processor {
         } else {
             this.debouncers.set(el, debounce(processor, this.debounceTime, true));
             await processor(source, el, ctx);
+            this.registerLinkHandlers(el);
             el.addEventListener('contextmenu', (event) => {
                 const {originalSource, source, ctx} = this.renderStates.get(el) ?? state;
 
@@ -143,6 +144,49 @@ export class DebouncedProcessors implements Processor {
             svg: filetype === 'svg' ? el.querySelector<SVGSVGElement>(':scope > svg') : null,
             code: filetype === 'ascii' ? el.querySelector<HTMLElement>(':scope > pre > code') : null,
         };
+    }
+
+    /**
+     * open links to notes inside the current workspace instead of handing the
+     * obsidian:// urls of image maps to the OS, which opens the vault again
+     */
+    registerLinkHandlers = (el: HTMLElement) => {
+        const hoverParent: HoverParent = {hoverPopover: null};
+
+        const getLink = (event: MouseEvent) => {
+            const target = event.target instanceof Element ? event.target.closest("a, area") : null;
+            if (!target || !el.contains(target)) return null;
+            const linkText = getInternalLinkText(target, this.plugin.app.vault.getName());
+            if (linkText === null) return null;
+            const sourcePath = this.renderStates.get(el)?.ctx?.sourcePath ?? '';
+            return {target, linkText, sourcePath};
+        };
+
+        const onClick = (event: MouseEvent) => {
+            if (event.button > 1) return;
+            const link = getLink(event);
+            if (!link) return;
+            event.preventDefault();
+            event.stopPropagation();
+            void this.plugin.app.workspace.openLinkText(link.linkText, link.sourcePath, Keymap.isModEvent(event));
+        };
+        el.addEventListener('click', onClick);
+        el.addEventListener('auxclick', onClick);
+
+        el.addEventListener('mouseover', (event) => {
+            const link = getLink(event);
+            if (!link) return;
+            //reading view handles hovering svg links with the internal-link class itself, don't show two previews
+            event.stopPropagation();
+            this.plugin.app.workspace.trigger('hover-link', {
+                event,
+                source: 'preview',
+                hoverParent,
+                targetEl: link.target,
+                linktext: link.linkText,
+                sourcePath: link.sourcePath,
+            });
+        });
     }
 
     renderToBlob = (img: HTMLImageElement, errorMessage: string, handleBlob: (blob: Blob) => Promise<void>) => {
