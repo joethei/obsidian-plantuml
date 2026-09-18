@@ -22,6 +22,11 @@ async function loadNodeModules() {
     }
 }
 
+interface LocalImage {
+    image: string;
+    error: boolean;
+}
+
 export class LocalProcessors implements Processor {
 
     plugin: PlantumlPlugin;
@@ -46,10 +51,12 @@ export class LocalProcessors implements Processor {
             return;
         }
 
-        const image = await this.generateLocalImage(source, OutputType.ASCII, this.plugin.replacer.getPath(ctx));
-        const includes = parseIncludedFiles(source);
-        const entry: DiagramCacheEntry = { ts: Date.now(), ascii: image, includes, ...cached && { png: cached.png, svg: cached.svg, map: cached.map } };
-        await this.plugin.cache.set(encoded, entry);
+        const {image, error} = await this.generateLocalImage(source, OutputType.ASCII, this.plugin.replacer.getPath(ctx));
+        if (!error) {
+            const includes = parseIncludedFiles(source);
+            const entry: DiagramCacheEntry = { ts: Date.now(), ascii: image, includes, ...cached && { png: cached.png, svg: cached.svg, map: cached.map } };
+            await this.plugin.cache.set(encoded, entry);
+        }
         insertAsciiImage(el, image);
     }
 
@@ -70,13 +77,15 @@ export class LocalProcessors implements Processor {
         }
 
         const path = this.plugin.replacer.getPath(ctx);
-        const [image, map] = await Promise.all([
+        const [{image, error}, map] = await Promise.all([
             this.generateLocalImage(source, OutputType.PNG, path),
             this.generateLocalMap(source, path),
         ]);
-        const includes = parseIncludedFiles(source);
-        const entry: DiagramCacheEntry = { ts: Date.now(), png: image, map, includes, ...cached && { svg: cached.svg, ascii: cached.ascii } };
-        await this.plugin.cache.set(encoded, entry);
+        if (!error) {
+            const includes = parseIncludedFiles(source);
+            const entry: DiagramCacheEntry = { ts: Date.now(), png: image, map, includes, ...cached && { svg: cached.svg, ascii: cached.ascii } };
+            await this.plugin.cache.set(encoded, entry);
+        }
         insertImageWithMap(el, image, map, encoded);
     }
 
@@ -96,10 +105,12 @@ export class LocalProcessors implements Processor {
             return;
         }
 
-        const image = await this.generateLocalImage(source, OutputType.SVG, this.plugin.replacer.getPath(ctx));
-        const includes = parseIncludedFiles(source);
-        const entry: DiagramCacheEntry = { ts: Date.now(), svg: image, includes, ...cached && { png: cached.png, map: cached.map, ascii: cached.ascii } };
-        await this.plugin.cache.set(encoded, entry);
+        const {image, error} = await this.generateLocalImage(source, OutputType.SVG, this.plugin.replacer.getPath(ctx));
+        if (!error) {
+            const includes = parseIncludedFiles(source);
+            const entry: DiagramCacheEntry = { ts: Date.now(), svg: image, includes, ...cached && { png: cached.png, map: cached.map, ascii: cached.ascii } };
+            await this.plugin.cache.set(encoded, entry);
+        }
         insertSvgImage(el, image);
     }
 
@@ -139,7 +150,7 @@ export class LocalProcessors implements Processor {
         });
     }
 
-    async generateLocalImage(source: string, type: OutputType, path: string): Promise<string> {
+    async generateLocalImage(source: string, type: OutputType, path: string): Promise<LocalImage> {
         if (!Platform.isDesktop) {
             throw new Error('Local processing is only available on desktop');
         }
@@ -174,23 +185,14 @@ export class LocalProcessors implements Processor {
                 if (stdout === null) {
                     return;
                 }
-                if (code === 0) {
-                    if (type === OutputType.PNG) {
-                        resolve(Buffer.from(stdout, 'binary').toString('base64'));
-                        return;
-                    }
-                    resolve(stdout);
-                    return;
-                } else if (code === 1) {
+                if (code === 1) {
                     console.error(stdout);
                     reject(new Error(stderr ?? ''));
-                } else {
-                    if (type === OutputType.PNG) {
-                        resolve(Buffer.from(stdout, 'binary').toString('base64'));
-                        return;
-                    }
-                    resolve(stdout);
+                    return;
                 }
+                const image = type === OutputType.PNG ? Buffer.from(stdout, 'binary').toString('base64') : stdout;
+                // PlantUML renders syntax errors and Graphviz failures into the image, those should not be cached
+                resolve({image, error: code !== 0 || /exception|error/i.test(stderr ?? '')});
             });
             child.stdin?.write(source, "utf-8");
             child.stdin?.end();
