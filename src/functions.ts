@@ -95,6 +95,34 @@ function isExternalUrl(href: string): boolean {
     return /^[a-z][a-z0-9+.-]*:/i.test(href);
 }
 
+/**
+ * get the link text of a link to a note in this vault inside a rendered diagram.
+ * png image maps link to obsidian:// urls, svg links contain the link text itself.
+ * @param link the clicked `a` or `area` element
+ * @param vaultName name of the current vault
+ * @return the link text, or null if the link does not point to a note in this vault
+ */
+export function getInternalLinkText(link: Element, vaultName: string): string | null {
+    const href = link.getAttribute("href") ?? link.getAttribute("xlink:href");
+    if (!href || href.startsWith("#")) return null;
+
+    const obsidianUrl = href.match(/^obsidian:\/\/(open|new)\?(.*)$/);
+    if (obsidianUrl) {
+        const params = new URLSearchParams(obsidianUrl[2]);
+        if (params.get("vault") !== vaultName) return null;
+        return params.get("file");
+    }
+
+    //any other scheme (http:, mailto:, ...) is an external link
+    if (isExternalUrl(href)) return null;
+
+    try {
+        return decodeURIComponent(href);
+    } catch {
+        return href;
+    }
+}
+
 export function insertImageWithMap(el: HTMLElement, image: string, map: string, encodedDiagram: string) {
     el.empty();
 

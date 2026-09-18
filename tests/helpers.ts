@@ -72,6 +72,7 @@ export function createPlugin(options: FakePluginOptions = {}): FakePlugin {
         },
         workspace: {
             openLinkText: vi.fn(async () => undefined),
+            trigger: vi.fn(),
             getLeaf: vi.fn(),
             getLeavesOfType: vi.fn(() => []),
             on: vi.fn(),
