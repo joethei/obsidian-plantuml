@@ -1,6 +1,7 @@
 import { debounce, Debouncer, Menu, Notice, TFile } from "obsidian";
 import PlantumlPlugin from "../main";
 import { Processor, ProcessorContext } from "./processor";
+import { serializeSvg } from "../functions";
 
 export class DebouncedProcessors implements Processor {
 
@@ -89,7 +90,7 @@ export class DebouncedProcessors implements Processor {
 
                                 const svg = el.querySelector('svg');
                                 if (svg) {
-                                    await navigator.clipboard.writeText(svg.outerHTML.replace(/&nbsp;/g, ''));
+                                    await navigator.clipboard.writeText(serializeSvg(svg));
                                     new Notice('Diagram copied to clipboard');
                                 }
                                 const code = el.querySelector('code');
@@ -123,7 +124,7 @@ export class DebouncedProcessors implements Processor {
 
                                 const svg = el.querySelector('svg');
                                 if (svg) {
-                                    await this.saveTextFile(source, ctx, 'svg', svg.outerHTML);
+                                    await this.saveTextFile(source, ctx, 'svg', serializeSvg(svg));
                                 }
 
                                 const code = el.querySelector('code');
