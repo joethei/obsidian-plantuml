@@ -1,4 +1,4 @@
-import {FileSystemAdapter, TAbstractFile} from "obsidian";
+import {FileSystemAdapter, parseLinktext, TAbstractFile} from "obsidian";
 import PlantumlPlugin from "./main";
 import {ProcessorContext} from "./processors/processor";
 
@@ -25,16 +25,20 @@ export class Replacer {
     public replaceLinks(text: string, sourcePath: string, filetype: string) : string {
         return text.replace(/\[\[\[([\s\S]*?)\]\]\]/g, ((_: string, args: string) => {
             const split = args.split("|");
-            const linkText = split[0];
-            const file = this.plugin.app.metadataCache.getFirstLinkpathDest(linkText, sourcePath);
+            const alias = split[1];
+            const {path, subpath} = parseLinktext(split[0]);
+            // links to headings or blocks in the same note have an empty path
+            const file = this.plugin.app.metadataCache.getFirstLinkpathDest(path || sourcePath, sourcePath);
+            const target = (file ? file.basename : path) + subpath;
             if(filetype === "png") {
                 const url = file
-                    ? (this.plugin.app as unknown as AppWithObsidianUrl).getObsidianUrl(file)
-                    : "obsidian://new?vault=" + encodeURIComponent(this.plugin.app.vault.getName()) + "&file=" + encodeURIComponent(linkText);
-                const alias = split[1] || (file ? file.basename : linkText);
-                return "[[" + url + " " + alias + "]]";
+                    ? (this.plugin.app as unknown as AppWithObsidianUrl).getObsidianUrl(file) + encodeURIComponent(subpath)
+                    : "obsidian://new?vault=" + encodeURIComponent(this.plugin.app.vault.getName()) + "&file=" + encodeURIComponent(path);
+                return "[[" + url + " " + (alias || target) + "]]";
             }
-            return "[[" + (file ? file.basename : linkText) + "]]";
+            // plantuml uses the first space to separate the url from the label, unless the url is quoted
+            const url = /\s/.test(target) ? "\"" + target + "\"" : target;
+            return "[[" + url + (alias ? " " + alias : "") + "]]";
         }));
     }
 
