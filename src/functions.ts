@@ -128,3 +128,11 @@ export function insertSvgImage(el: HTMLElement, image: string) {
 
 
 }
+
+/**
+ * serialize the svg as a standalone XML document.
+ * outerHTML uses HTML serialization, which emits entities like &nbsp; that are not valid in XML
+ */
+export function serializeSvg(svg: SVGElement): string {
+    return new XMLSerializer().serializeToString(svg);
+}
