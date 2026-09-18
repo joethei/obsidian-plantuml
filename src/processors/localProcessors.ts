@@ -1,6 +1,6 @@
 import PlantumlPlugin from "../main";
-import {Processor} from "./processor";
-import {MarkdownPostProcessorContext, Platform} from "obsidian";
+import {Processor, ProcessorContext} from "./processor";
+import {Platform} from "obsidian";
 import * as plantuml from "plantuml-encoder";
 import {insertAsciiImage, insertImageWithMap, insertSvgImage} from "../functions";
 import {OutputType} from "../const";
@@ -30,7 +30,7 @@ export class LocalProcessors implements Processor {
         this.plugin = plugin;
     }
 
-    ascii = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+    ascii = async(source: string, el: HTMLElement, ctx: ProcessorContext) => {
         if (!Platform.isDesktop) {
             throw new Error('Local processing is only available on desktop');
         }
@@ -53,7 +53,7 @@ export class LocalProcessors implements Processor {
         insertAsciiImage(el, image);
     }
 
-    png = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+    png = async(source: string, el: HTMLElement, ctx: ProcessorContext) => {
         if (!Platform.isDesktop) {
             throw new Error('Local processing is only available on desktop');
         }
@@ -80,7 +80,7 @@ export class LocalProcessors implements Processor {
         insertImageWithMap(el, image, map, encoded);
     }
 
-    svg = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+    svg = async(source: string, el: HTMLElement, ctx: ProcessorContext) => {
         if (!Platform.isDesktop) {
             throw new Error('Local processing is only available on desktop');
         }

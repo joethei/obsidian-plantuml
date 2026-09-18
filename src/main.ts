@@ -45,6 +45,7 @@ export default class PlantumlPlugin extends Plugin {
 
     serverProcessor: Processor;
     localProcessor: Processor;
+    debouncedProcessor: DebouncedProcessors;
     replacer: Replacer;
 
     observer: MutationObserver;
@@ -79,6 +80,7 @@ export default class PlantumlPlugin extends Plugin {
             }
 
             const processor = new DebouncedProcessors(this);
+            this.debouncedProcessor = processor;
 
             addIcon("document-" + VIEW_TYPE, LOGO_SVG);
             this.registerView(VIEW_TYPE, (leaf) => {
@@ -162,9 +164,9 @@ export default class PlantumlPlugin extends Plugin {
         const fileContent = await this.app.vault.read(file);
         const imgDiv = createDiv();
         if(this.settings.defaultProcessor === "png") {
-            await this.getProcessor().png(fileContent, imgDiv, null);
+            await this.debouncedProcessor.png(fileContent, imgDiv, {sourcePath: file.path});
         }else {
-            await this.getProcessor().svg(fileContent, imgDiv, null);
+            await this.debouncedProcessor.svg(fileContent, imgDiv, {sourcePath: file.path});
         }
 
         const node: Node = mutations[0].addedNodes[0];
