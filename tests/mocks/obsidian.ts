@@ -90,6 +90,8 @@ export class Menu {
     /** the most recently shown menu, handy for asserting on context menus */
     static lastShown: Menu | null = null;
     items: MenuItem[] = [];
+    closed = false;
+    hideCallbacks: Array<() => void> = [];
 
     addItem(cb: (item: MenuItem) => unknown) {
         const item = new MenuItem();
@@ -101,13 +103,27 @@ export class Menu {
     addSeparator() { return this; }
 
     showAtMouseEvent(_evt: MouseEvent) {
+        this.closed = false;
         Menu.lastShown = this;
         return this;
     }
 
     showAtPosition(_pos: unknown) {
+        this.closed = false;
         Menu.lastShown = this;
         return this;
+    }
+
+    onHide(callback: () => void) {
+        this.hideCallbacks.push(callback);
+        return this;
+    }
+
+    close() {
+        if (this.closed) return;
+        this.closed = true;
+        if (Menu.lastShown === this) Menu.lastShown = null;
+        this.hideCallbacks.forEach(callback => callback());
     }
 
     /** test helper: find an item by its title */
