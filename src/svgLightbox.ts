@@ -119,6 +119,7 @@ function enhanceNativeSvgLightbox(sourceImage: PlantumlLightboxTrigger, plugin: 
 
     const svg = sourceImage.plantumlSvg.cloneNode(true) as SVGSVGElement;
     svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    svg.setAttribute("tabindex", "0");
     svg.classList.add("plantuml-svg-lightbox-inline");
     lightbox.classList.add("plantuml-svg-lightbox");
     let activeMenu: Menu | null = null;
@@ -244,7 +245,7 @@ function enhanceNativeSvgLightbox(sourceImage: PlantumlLightboxTrigger, plugin: 
         mediaWrapper.removeEventListener("pointerdown", snapshotContextMenuSelection);
         mediaWrapper.removeEventListener("mousedown", snapshotContextMenuSelection);
         mediaWrapper.removeEventListener("contextmenu", onSvgContextMenu);
-        ownerWindow.removeEventListener("keydown", onKeyDown, true);
+        svg.removeEventListener("keydown", onKeyDown);
         ownerWindow.removeEventListener("copy", onCopy, true);
     };
     lifecycleObserver = new ownerWindow.MutationObserver(() => {
@@ -259,11 +260,12 @@ function enhanceNativeSvgLightbox(sourceImage: PlantumlLightboxTrigger, plugin: 
     mediaWrapper.addEventListener("pointerdown", snapshotContextMenuSelection);
     mediaWrapper.addEventListener("mousedown", snapshotContextMenuSelection);
     mediaWrapper.addEventListener("contextmenu", onSvgContextMenu);
-    ownerWindow.addEventListener("keydown", onKeyDown, true);
+    svg.addEventListener("keydown", onKeyDown);
     ownerWindow.addEventListener("copy", onCopy, true);
     nativeImage.classList.add("plantuml-svg-lightbox-native");
     mediaWrapper.appendChild(svg);
     syncNativeImage();
+    svg.focus({preventScroll: true});
     sourceImage.remove();
 }
 

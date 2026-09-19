@@ -165,6 +165,7 @@ describe("SVG Lightbox", () => {
         expect(nativeImage?.title).toBe("Sequence flow");
         expect(nativeImage?.alt).not.toContain("%3Csvg");
         expect(clone).not.toBeNull();
+        expect(clone?.getAttribute("preserveAspectRatio")).toBe("xMidYMid meet");
         expect(clone?.querySelector("script")).toBeNull();
         expect(clone?.querySelector("rect")?.hasAttribute("onclick")).toBe(false);
         expect(clone?.querySelector("style")).not.toBeNull();
@@ -239,16 +240,42 @@ describe("SVG Lightbox", () => {
     });
 
     it("scopes select-all and copied text to the Lightbox SVG and removes the handlers on close", async () => {
+        const outside = document.body.createEl("input");
+        outside.value = "Outside";
+        outside.focus();
+        outside.setSelectionRange(1, 4);
+        const focus = vi.spyOn(SVGElement.prototype, "focus");
         const {lightbox, clone} = await openLightbox();
         const selection = window.getSelection();
-        const selectAll = new KeyboardEvent("keydown", {key: "a", ctrlKey: true, bubbles: true, cancelable: true});
+        const focusedOnInstall = document.activeElement;
 
-        window.dispatchEvent(selectAll);
+        outside.focus();
+        outside.setSelectionRange(1, 4);
+        const outsideSelectAll = new KeyboardEvent("keydown", {key: "a", ctrlKey: true, bubbles: true, cancelable: true});
+        outside.dispatchEvent(outsideSelectAll);
+        expect(outsideSelectAll.defaultPrevented).toBe(false);
+        expect(outside.selectionStart).toBe(1);
+        expect(outside.selectionEnd).toBe(4);
 
-        expect(selectAll.defaultPrevented).toBe(true);
-        expect(selection?.rangeCount).toBe(1);
-        expect(clone.contains(selection?.anchorNode ?? null) || selection?.anchorNode === clone).toBe(true);
-        expect(clone.contains(selection?.focusNode ?? null) || selection?.focusNode === clone).toBe(true);
+        expect(clone.getAttribute("tabindex")).toBe("0");
+        expect(focus).toHaveBeenCalledWith({preventScroll: true});
+        expect(focusedOnInstall).toBe(clone);
+        for (const modifier of [{ctrlKey: true}, {metaKey: true}]) {
+            selection?.removeAllRanges();
+            clone.focus();
+            const selectAll = new KeyboardEvent("keydown", {
+                key: "a",
+                ...modifier,
+                bubbles: true,
+                cancelable: true,
+            });
+            clone.dispatchEvent(selectAll);
+
+            expect(selectAll.defaultPrevented).toBe(true);
+            expect(selection?.rangeCount).toBe(1);
+            expect(clone.contains(selection?.anchorNode ?? null) || selection?.anchorNode === clone).toBe(true);
+            expect(clone.contains(selection?.focusNode ?? null) || selection?.focusNode === clone).toBe(true);
+        }
 
         const setData = vi.fn();
         const copy = new Event("copy", {bubbles: true, cancelable: true}) as ClipboardEvent;
@@ -257,9 +284,9 @@ describe("SVG Lightbox", () => {
         expect(copy.defaultPrevented).toBe(true);
         expect(setData).toHaveBeenCalledWith("text/plain", "Open target\nAlice\nExternal");
 
-        const outside = document.body.createEl("p", {text: "Outside"});
+        const outsideText = document.body.createEl("p", {text: "Outside"});
         const outsideRange = document.createRange();
-        outsideRange.selectNodeContents(outside);
+        outsideRange.selectNodeContents(outsideText);
         selection?.removeAllRanges();
         selection?.addRange(outsideRange);
         const outsideCopy = new Event("copy", {bubbles: true, cancelable: true}) as ClipboardEvent;
@@ -272,6 +299,28 @@ describe("SVG Lightbox", () => {
         const nativeImage = lightbox.querySelector<HTMLImageElement>(".media-wrapper > img") as HTMLImageElement;
         click(lightbox.querySelector(".modal-close-button") as HTMLButtonElement);
         await Promise.resolve();
+        expect(clone.isConnected).toBe(false);
+
+        const selectionBeforeDetachedKeydown = {
+            anchorNode: selection?.anchorNode,
+            anchorOffset: selection?.anchorOffset,
+            focusNode: selection?.focusNode,
+            focusOffset: selection?.focusOffset,
+            rangeCount: selection?.rangeCount,
+            text: selection?.toString(),
+        };
+        const detachedSelectAll = new KeyboardEvent("keydown", {key: "a", ctrlKey: true, bubbles: true, cancelable: true});
+        clone.dispatchEvent(detachedSelectAll);
+        expect(detachedSelectAll.defaultPrevented).toBe(false);
+        expect({
+            anchorNode: selection?.anchorNode,
+            anchorOffset: selection?.anchorOffset,
+            focusNode: selection?.focusNode,
+            focusOffset: selection?.focusOffset,
+            rangeCount: selection?.rangeCount,
+            text: selection?.toString(),
+        }).toEqual(selectionBeforeDetachedKeydown);
+
         const afterClose = new KeyboardEvent("keydown", {key: "a", ctrlKey: true, bubbles: true, cancelable: true});
         window.dispatchEvent(afterClose);
         expect(afterClose.defaultPrevented).toBe(false);
@@ -423,9 +472,13 @@ describe("SVG Lightbox", () => {
         expect(lightboxContainer.querySelectorAll("[data-plantuml-lightbox-trigger]")).toHaveLength(1);
     });
 
-    it("styles only the Lightbox clone for selectable text without replacing the note SVG", () => {
+    it("shrinks wide note SVGs without enlarging small ones and styles only the Lightbox clone for selection", () => {
         const css = readFileSync(resolve(__dirname, "../styles.css"), "utf8").replace(/\s+/g, " ");
+        const noteSvgRule = css.match(/\.puml-svg \{([^}]*)\}/)?.[1] ?? "";
 
+        expect(noteSvgRule).toContain("max-width: 100%;");
+        expect(noteSvgRule).toContain("height: auto !important;");
+        expect(noteSvgRule).not.toMatch(/(?:^|;)\s*width:\s*100%;/);
         expect(css).toMatch(/\.plantuml-svg-lightbox-trigger \{[^}]*position: fixed;/);
         expect(css).toMatch(/\.plantuml-svg-lightbox-inline \{[^}]*position: absolute;/);
         expect(css).toMatch(/\.plantuml-svg-lightbox-native \{[^}]*opacity: 0;/);
