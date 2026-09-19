@@ -21,7 +21,11 @@ export class DebouncedProcessors implements Processor {
     }
 
     default = async(source: string, el: HTMLElement, ctx: ProcessorContext) => {
-        await this.png(source, el, ctx);
+        await this[this.plugin.settings.defaultProcessor](source, el, ctx);
+    }
+
+    codeBlock = async(source: string, el: HTMLElement, ctx: ProcessorContext) => {
+        await this[this.plugin.settings.codeBlockProcessor](source, el, ctx);
     }
 
     png = async (source: string, el: HTMLElement, ctx: ProcessorContext) => {
