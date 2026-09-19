@@ -23,6 +23,18 @@ const SOURCE = "@startuml\nA -> B\n@enduml";
 const CONTEXT = {sourcePath: "Diagrams/example.puml"};
 
 describe("default processor settings", () => {
+    it("loads old settings without overwriting the saved default processor", async () => {
+        const fakePlugin = createPlugin();
+        const plugin = new PlantumlPlugin(fakePlugin.app, {});
+        vi.spyOn(plugin, "loadData").mockResolvedValue({defaultProcessor: "svg"});
+
+        await plugin.loadSettings();
+
+        expect(plugin.settings.defaultProcessor).toBe("svg");
+        expect(plugin.settings.codeBlockProcessor).toBe(DEFAULT_SETTINGS.codeBlockProcessor);
+        expect(plugin.settings.codeBlockProcessor).toBe("png");
+    });
+
     it("keeps includes on defaultProcessor and defaults ordinary code blocks to PNG", () => {
         expect(DEFAULT_SETTINGS.defaultProcessor).toBe("png");
         expect(DEFAULT_SETTINGS.codeBlockProcessor).toBe("png");
