@@ -62,11 +62,13 @@ const SAFE_STYLE_PROPERTIES = new Set([
     "background",
     "background-color",
     "baseline-shift",
+    "clip-path",
     "color",
     "dominant-baseline",
     "fill",
     "fill-opacity",
     "fill-rule",
+    "filter",
     "font-family",
     "font-size",
     "font-stretch",
@@ -75,6 +77,11 @@ const SAFE_STYLE_PROPERTIES = new Set([
     "font-weight",
     "height",
     "letter-spacing",
+    "marker",
+    "marker-end",
+    "marker-mid",
+    "marker-start",
+    "mask",
     "opacity",
     "paint-order",
     "shape-rendering",
@@ -100,6 +107,7 @@ const SAFE_STYLE_PROPERTIES = new Set([
 const SAFE_CSS_SELECTOR = /^[a-zA-Z0-9_.#,+>~\s-]+$/;
 const SAFE_DATA_IMAGE = /^data:image\/(?:png|jpeg|gif|webp);base64,[a-z0-9+/]+={0,2}$/i;
 const SANITIZED_SVG_CLASS = "plantuml-svg-sanitized";
+let sanitizedSvgSequence = 0;
 
 export interface SvgTextFragment {
     text: string;
@@ -205,7 +213,7 @@ function classifySvgUrl(value: string): SvgUrlClassification {
             return {kind: "unsafe", target: ""};
         }
         return ["http", "https", "mailto", "obsidian"].includes(name)
-            ? {kind: "external", target}
+            ? {kind: "external", target: rawTarget}
             : {kind: "unsafe", target: ""};
     }
     return {kind: "vault", target};
@@ -258,11 +266,13 @@ function isSafeStyle(value: string): boolean {
 
         const property = declaration.slice(0, separator).trim().toLowerCase();
         const propertyValue = declaration.slice(separator + 1).trim();
+        const localUrlsRemoved = propertyValue.replace(/url\s*\(\s*(['"]?)\s*#[^'"\s)]+\s*\1\s*\)/gi, "#local");
         return SAFE_STYLE_PROPERTIES.has(property)
             && propertyValue.length > 0
             && !hasControlCharacter(propertyValue)
-            && !/(?:url|var|expression|attr|env|image|image-set)\s*\(/i.test(propertyValue)
-            && isSafeStyleValue(propertyValue);
+            && (!/url\s*\(/i.test(propertyValue) || URL_PRESENTATION_ATTRIBUTES.has(property))
+            && !/(?:url|var|expression|attr|env|image|image-set)\s*\(/i.test(localUrlsRemoved)
+            && isSafeStyleValue(localUrlsRemoved);
     });
 }
 
@@ -277,6 +287,7 @@ function sanitizeStyleSheet(css: string): string | null {
         const selectors = match[1].split(",").map(selector => selector.trim());
         if (selectors.length === 0 || selectors.some(selector => !selector
             || !SAFE_CSS_SELECTOR.test(selector)
+            || /^[+~]/.test(selector)
             || /^svg(?:$|[\s.#>+~])/i.test(selector) && /[+~]/.test(selector)
             || /(^|[\s>+~])(body|html)(?=$|[\s>+~.#])/i.test(selector))) {
             return null;
@@ -294,6 +305,86 @@ function sanitizeStyleSheet(css: string): string | null {
     }
     if (blocks.length === 0 || css.slice(lastIndex).trim()) return null;
     return blocks.join("\n");
+}
+
+function rewriteLocalUrls(value: string, idMap: Map<string, string>): string | null {
+    let unresolved = false;
+    const rewritten = value.replace(/url\s*\(\s*(['"]?)\s*#([^'"\s)]+)\s*\1\s*\)/gi, (_match, quote: string, id: string) => {
+        const replacement = idMap.get(id);
+        if (!replacement) {
+            unresolved = true;
+            return "";
+        }
+        return `url(${quote}#${replacement}${quote})`;
+    });
+    return unresolved ? null : rewritten;
+}
+
+function rewriteStyleDeclarations(declarations: string, idMap: Map<string, string>): string {
+    return declarations.split(";").flatMap(declaration => {
+        const separator = declaration.indexOf(":");
+        if (separator <= 0) return [];
+        const property = declaration.slice(0, separator).trim();
+        const value = rewriteLocalUrls(declaration.slice(separator + 1).trim(), idMap);
+        return value === null ? [] : [`${property}:${value}`];
+    }).join(";");
+}
+
+function namespaceSvgIds(root: Element, ownerWindow: Window): void {
+    const random = new Uint32Array(4);
+    ownerWindow.crypto.getRandomValues(random);
+    const prefix = `plantuml-svg-${Array.from(random, value => value.toString(16).padStart(8, "0")).join("")}-${sanitizedSvgSequence++}-`;
+    const idMap = new Map<string, string>();
+    const idElements = [
+        ...(root.hasAttribute("id") ? [root] : []),
+        ...Array.from(root.querySelectorAll("[id]")),
+    ];
+    idElements.forEach((element, index) => {
+        const id = element.getAttribute("id") ?? "";
+        const safeId = id.replace(/[^a-zA-Z0-9_-]/g, "_") || "id";
+        const namespacedId = `${prefix}${index}-${safeId}`;
+        if (!idMap.has(id)) idMap.set(id, namespacedId);
+        element.setAttribute("id", namespacedId);
+    });
+
+    for (const element of [root, ...Array.from(root.querySelectorAll("*"))]) {
+        for (const attribute of Array.from(element.attributes)) {
+            const name = attribute.localName.toLowerCase();
+            if (name === "href") {
+                const classified = classifySvgUrl(attribute.value);
+                if (classified.kind !== "fragment") continue;
+                const replacement = idMap.get(classified.target.slice(1));
+                if (replacement) attribute.value = `#${replacement}`;
+                else element.removeAttributeNode(attribute);
+            } else if (URL_PRESENTATION_ATTRIBUTES.has(name)) {
+                const rewritten = rewriteLocalUrls(attribute.value, idMap);
+                if (rewritten === null) element.removeAttributeNode(attribute);
+                else attribute.value = rewritten;
+            } else if (name === "style") {
+                const rewritten = rewriteStyleDeclarations(attribute.value, idMap);
+                if (rewritten) attribute.value = rewritten;
+                else element.removeAttributeNode(attribute);
+            } else if (["aria-describedby", "aria-labelledby"].includes(name)) {
+                const references = attribute.value.trim().split(/\s+/).map(id => idMap.get(id));
+                if (references.length > 0 && references.every(Boolean)) attribute.value = references.join(" ");
+                else element.removeAttributeNode(attribute);
+            }
+        }
+        if (element.localName.toLowerCase() !== "style") continue;
+
+        const rewrittenRules: string[] = [];
+        const rule = /([^{}]+)\{([^{}]+)\}/g;
+        for (let match = rule.exec(element.textContent ?? ""); match; match = rule.exec(element.textContent ?? "")) {
+            const selector = match[1].trim().replace(/#([a-zA-Z_][\w-]*)/g, (token, id: string) => {
+                const replacement = idMap.get(id);
+                return replacement ? `#${replacement}` : token;
+            });
+            const declarations = rewriteStyleDeclarations(match[2], idMap);
+            if (declarations) rewrittenRules.push(`${selector} { ${declarations} }`);
+        }
+        if (rewrittenRules.length > 0) element.textContent = rewrittenRules.join("\n");
+        else element.remove();
+    }
 }
 
 export function isUnsafeSvgElement(tagName: string): boolean {
@@ -392,6 +483,7 @@ export function sanitizeSvg(svgText: string, ownerDocument: Document): SVGSVGEle
     }
 
     root.classList.add(SANITIZED_SVG_CLASS);
+    namespaceSvgIds(root, ownerWindow);
     for (const anchor of Array.from(root.querySelectorAll("a"))) {
         const target = anchor.getAttribute("href") ?? anchor.getAttributeNS(XLINK_NAMESPACE, "href");
         if (!target) continue;

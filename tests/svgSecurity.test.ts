@@ -82,12 +82,63 @@ describe("SVG sanitizer", () => {
 
         expect(svg).not.toBeNull();
         expect(svg?.querySelector("style, linearGradient, clipPath, filter, feGaussianBlur, feColorMatrix, feOffset, feBlend, symbol, marker, use, image, text, tspan")).not.toBeNull();
-        expect(svg?.querySelector("use")?.getAttribute("href")).toBe("#sprite");
+        expect(svg?.querySelector("use")?.getAttribute("href")).toBe(`#${svg?.querySelector("symbol")?.id}`);
         expect(svg?.querySelector("image")?.getAttribute("href")).toBe("data:image/png;base64,AQIDBA==");
         expect(svg?.querySelector("handler, listener, animation, prefetch, font-face-uri, color-profile, future-resource")).toBeNull();
         const finalRect = Array.from(svg?.querySelectorAll("rect") ?? []).at(-1);
         expect(finalRect?.hasAttribute("unknown-resource")).toBe(false);
         expect(finalRect?.hasAttribute("externalResourcesRequired")).toBe(false);
+    });
+
+    it("namespaces every local reference away from document and sanitizer-call ID collisions", () => {
+        const ids = ["gradient", "filter", "mask", "clip", "marker", "sprite", "painted"];
+        const unsafeOriginal = document.createElementNS(SVG_NAMESPACE, "svg");
+        unsafeOriginal.innerHTML = ids.map(id => `<g id="${id}"></g>`).join("");
+        document.body.appendChild(unsafeOriginal);
+        const source = `<svg xmlns="${SVG_NAMESPACE}" xmlns:xlink="${XLINK_NAMESPACE}">
+            <style>#painted { fill: url(#gradient); filter: url('#filter'); mask: url(#mask); clip-path: url(#clip); marker-end: url(#marker); }</style>
+            <defs>
+                <linearGradient id="gradient" />
+                <filter id="filter" />
+                <mask id="mask" />
+                <clipPath id="clip" />
+                <marker id="marker" />
+                <symbol id="sprite" />
+            </defs>
+            <g id="painted" fill="url(#gradient)" filter="url(#filter)" mask="url(#mask)" clip-path="url(#clip)" marker-start="url(#marker)" marker-mid="url(#marker)" marker-end="url(#marker)" />
+            <use href="#sprite" />
+            <use xlink:href="#sprite" />
+            <a href="https://example.com/#sprite"><text>external</text></a>
+        </svg>`;
+
+        const clones = [sanitizeSvg(source, document), sanitizeSvg(source, document)] as SVGSVGElement[];
+        clones.forEach(clone => document.body.appendChild(clone));
+
+        const cloneIdSets = clones.map(clone => new Set(Array.from(clone.querySelectorAll("[id]"), element => element.id)));
+        expect(cloneIdSets[0].size).toBe(ids.length);
+        expect(cloneIdSets[1].size).toBe(ids.length);
+        expect([...cloneIdSets[0]].every(id => !ids.includes(id) && !cloneIdSets[1].has(id))).toBe(true);
+
+        for (const [clone, cloneIds] of clones.map((clone, index) => [clone, cloneIdSets[index]] as const)) {
+            const localTargets = [
+                ...Array.from(clone.querySelectorAll("use"), use => use.getAttribute("href") ?? use.getAttributeNS(XLINK_NAMESPACE, "href") ?? ""),
+                ...["fill", "filter", "mask", "clip-path", "marker-start", "marker-mid", "marker-end"]
+                    .map(attribute => clone.querySelector("g[fill]")?.getAttribute(attribute)?.match(/#([^)'"]+)/)?.[1] ?? "")
+                    .map(id => `#${id}`),
+                ...Array.from(clone.querySelector("style")?.textContent?.matchAll(/url\(\s*['"]?#([^'"\s)]+)['"]?\s*\)/g) ?? [], match => `#${match[1]}`),
+            ];
+            expect(localTargets).toHaveLength(14);
+            for (const target of localTargets) {
+                expect(target).toMatch(/^#[a-zA-Z][\w-]+$/);
+                const id = target.slice(1);
+                expect(cloneIds.has(id), target).toBe(true);
+                expect(document.querySelectorAll(`[id="${id}"]`)).toHaveLength(1);
+            }
+
+            const paintedId = Array.from(cloneIds).find(id => id.endsWith("painted"));
+            expect(clone.querySelector("style")?.textContent).toContain(`#${paintedId}`);
+            expect(clone.querySelector("a")?.getAttribute("href")).toBe("https://example.com/#sprite");
+        }
     });
 
     it("canonicalizes percent encoding before sanitizing and classifying links", () => {
@@ -106,14 +157,26 @@ describe("SVG sanitizer", () => {
             <a id="safe" href="Folder%2FNote%23Heading"><text>safe</text></a>
             ${anchors}
         </svg>`, document);
+        const sanitizedAnchors = Array.from(svg?.querySelectorAll("a") ?? []);
 
-        expect(svg?.querySelector("#safe")?.getAttribute("href")).toBe("Folder/Note#Heading");
-        expect(svg?.querySelector("#safe")?.getAttribute("data-href")).toBe("Folder/Note#Heading");
+        expect(sanitizedAnchors[0]?.getAttribute("href")).toBe("Folder/Note#Heading");
+        expect(sanitizedAnchors[0]?.getAttribute("data-href")).toBe("Folder/Note#Heading");
         unsafeTargets.forEach((target, index) => {
-            expect(svg?.querySelector(`#unsafe-${index}`)?.hasAttribute("href"), target).toBe(false);
+            expect(sanitizedAnchors[index + 1]?.hasAttribute("href"), target).toBe(false);
             expect(isRelativeVaultLink(target), target).toBe(false);
         });
         expect(isRelativeVaultLink("Folder%2FNote%23Heading")).toBe(true);
+    });
+
+    it("preserves encoded external URL semantics after safety classification", () => {
+        const target = "https://example.com/?x=%26y%23z";
+        const svg = sanitizeSvg(`<svg xmlns="${SVG_NAMESPACE}">
+            <a href="  ${target}  "><text>external</text></a>
+        </svg>`, document);
+        const anchor = svg?.querySelector("a");
+
+        expect(anchor?.getAttribute("href")).toBe(target);
+        expect(anchor?.classList.contains("external-link")).toBe(true);
     });
 
     it("preserves safe PlantUML style elements and removes unsafe CSS", () => {
@@ -136,6 +199,22 @@ describe("SVG sanitizer", () => {
         ]) {
             const svg = sanitizeSvg(`<svg xmlns="${SVG_NAMESPACE}"><style>${css}</style><rect /></svg>`, document);
             expect(svg?.querySelector("style"), css).toBeNull();
+        }
+    });
+
+    it("rejects selectors that escape to a following host sibling", () => {
+        for (const combinator of ["+", "~"]) {
+            const host = document.createElement("div");
+            const outside = document.createElement("div");
+            outside.id = "outside-sibling";
+            const svg = sanitizeSvg(`<svg xmlns="${SVG_NAMESPACE}">
+                <style>${combinator} #outside-sibling { visibility: hidden; }</style>
+                <rect />
+            </svg>`, document);
+            host.append(svg as SVGSVGElement, outside);
+
+            expect(svg?.querySelector("style"), combinator).toBeNull();
+            expect(outside.id).toBe("outside-sibling");
         }
     });
 
@@ -169,7 +248,7 @@ describe("SVG sanitizer", () => {
 
         expect(svg?.getAttributeNS(XML_NAMESPACE, "lang")).toBe("en");
         expect(svg?.getAttributeNS(XML_NAMESPACE, "space")).toBe("preserve");
-        expect(svg?.querySelector("rect")?.getAttribute("fill")).toBe("url(#gradient)");
+        expect(svg?.querySelector("rect")?.getAttribute("fill")).toBe(`url(#${svg?.querySelector("linearGradient")?.id})`);
         expect(links?.[0].classList.contains("internal-link")).toBe(true);
         expect(links?.[0].getAttribute("data-href")).toBe("Folder/Note#Heading");
         expect(links?.[0].hasAttribute("target")).toBe(false);

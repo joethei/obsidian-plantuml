@@ -225,15 +225,16 @@ describe("SVG Lightbox", () => {
             <a id="safe" href="Folder%2FTarget%23Heading"><text x="10" y="10">safe</text></a>
             ${links}
         </svg>`);
+        const anchors = Array.from(clone.querySelectorAll("a"));
 
         maliciousTargets.forEach((_href, index) => {
-            const anchor = clone.querySelector(`#unsafe-${index}`) as SVGAElement;
+            const anchor = anchors[index + 1];
             expect(anchor.hasAttribute("href")).toBe(false);
             click(anchor.querySelector("text") as SVGTextElement);
         });
         expect(plugin.app.workspace.openLinkText).not.toHaveBeenCalled();
 
-        const safe = click(clone.querySelector("#safe text") as SVGTextElement);
+        const safe = click(anchors[0].querySelector("text") as SVGTextElement);
         expect(safe.defaultPrevented).toBe(true);
         expect(plugin.app.workspace.openLinkText).toHaveBeenCalledWith("Folder/Target#Heading", SOURCE_PATH, false);
         expect(lightbox.isConnected).toBe(true);
