@@ -9,7 +9,13 @@ export class DebouncedProcessors implements Processor {
 
     // keyed by the element the diagram is rendered into, so that re-rendering the same element is debounced
     debouncers = new WeakMap<HTMLElement, Debouncer<[string, HTMLElement, ProcessorContext], unknown>>();
-    renderStates = new WeakMap<HTMLElement, {originalSource: string, source: string, ctx: ProcessorContext}>();
+    renderStates = new WeakMap<HTMLElement, {
+        originalSource: string,
+        source: string,
+        ctx: ProcessorContext,
+        filetype: string,
+        processor: (source: string, el: HTMLElement, ctx: ProcessorContext) => Promise<void>,
+    }>();
 
     debounceTime: number;
     plugin: PlantumlPlugin;
@@ -52,12 +58,12 @@ export class DebouncedProcessors implements Processor {
         source = this.plugin.replacer.insertHeaders(source, this.plugin.settings.header, themeHeader);
 
         const isRerender = this.renderStates.has(el);
-        const state = {originalSource, source, ctx};
+        const state = {originalSource, source, ctx, filetype, processor};
         this.renderStates.set(el, state);
 
         const render = async (source: string, el: HTMLElement, ctx: ProcessorContext) => {
             try {
-                await processor(source, el, ctx);
+                await this.renderStates.get(el)?.processor(source, el, ctx);
             } catch (error) {
                 console.error("PlantUML: failed to render diagram", error);
                 insertErrorMessage(el, error);
@@ -71,7 +77,7 @@ export class DebouncedProcessors implements Processor {
             await render(source, el, ctx);
             this.registerLinkHandlers(el);
             el.addEventListener('contextmenu', (event) => {
-                const {originalSource, source, ctx} = this.renderStates.get(el) ?? state;
+                const {originalSource, source, ctx, filetype} = this.renderStates.get(el) ?? state;
 
                 const menu = new Menu()
                     .addItem(item => {

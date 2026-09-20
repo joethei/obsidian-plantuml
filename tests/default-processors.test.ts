@@ -1,5 +1,5 @@
 import {describe, expect, it, vi} from "vitest";
-import {TFile} from "obsidian";
+import {Menu, TFile} from "obsidian";
 import PlantumlPlugin from "../src/main";
 import {PumlView} from "../src/PumlView";
 import {PumlEmbed} from "../src/embed";
@@ -79,6 +79,42 @@ describe("default processor settings", () => {
 
         expect(png).toHaveBeenCalledWith(SOURCE, includeEl, CONTEXT);
         expect(svg).toHaveBeenCalledWith(SOURCE, codeBlockEl, CONTEXT);
+    });
+
+    it("uses the current default processor when rerendering the same element", async () => {
+        vi.useFakeTimers();
+        const writeText = vi.fn(async () => undefined);
+        Object.defineProperty(navigator, "clipboard", {value: {writeText}, configurable: true});
+
+        try {
+            const plugin = createPlugin({settings: {defaultProcessor: "png", debounce: 1}});
+            const png = vi.fn(async (_source: string, el: HTMLElement) => {
+                el.replaceChildren(document.createElement("img"));
+            });
+            const svg = vi.fn(async (_source: string, el: HTMLElement) => {
+                el.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg"><text>SVG</text></svg>';
+            });
+            plugin.serverProcessor = {png, svg} as never;
+            const processors = new DebouncedProcessors(plugin);
+            const el = document.createElement("div");
+
+            await processors.default(SOURCE, el, CONTEXT);
+            plugin.settings.defaultProcessor = "svg";
+            void processors.default(SOURCE, el, CONTEXT);
+            await vi.advanceTimersByTimeAsync(1000);
+
+            expect(png).toHaveBeenCalledTimes(1);
+            expect(svg).toHaveBeenCalledTimes(1);
+            expect(el.dataset.filetype).toBe("svg");
+            expect(el.querySelector(":scope > svg")).not.toBeNull();
+
+            el.dispatchEvent(new MouseEvent("contextmenu"));
+            await (Menu.lastShown as Menu).getItem("Copy diagram").callback();
+            expect(writeText).toHaveBeenCalledWith(expect.stringContaining("<svg"));
+        } finally {
+            Reflect.deleteProperty(navigator, "clipboard");
+            vi.useRealTimers();
+        }
     });
 
     it("registers generic code blocks through codeBlock and leaves explicit processors fixed", async () => {
