@@ -189,8 +189,8 @@ function enhanceNativeSvgLightbox(sourceImage: PlantumlLightboxTrigger, plugin: 
     if (!lightbox) {
         // Obsidian 1.13.7 registers no media-click callback for Live Preview's
         // .markdown-source-view, so its dynamically appended trigger cannot open the native Lightbox.
-        const fallbackAfterAttempts = sourceImage.closest(".markdown-source-view") ? 1 : 60;
-        if (attempts < fallbackAfterAttempts && sourceImage.isConnected) {
+        const isLivePreview = Boolean(sourceImage.closest(".markdown-source-view"));
+        if (!isLivePreview && attempts < 60 && sourceImage.isConnected) {
             ownerWindow.requestAnimationFrame(() => enhanceNativeSvgLightbox(sourceImage, plugin, sourcePath, attempts + 1));
         } else if (sourceImage.isConnected) {
             createFallbackLightbox(sourceImage);
@@ -385,6 +385,10 @@ export function registerSvgLightbox(el: HTMLElement, plugin: PlantumlPlugin, sou
         trigger.classList.add("plantuml-svg-lightbox-trigger");
         el.appendChild(trigger);
         trigger.click();
-        svg.ownerDocument.defaultView?.requestAnimationFrame(() => enhanceNativeSvgLightbox(trigger, plugin, sourcePath));
+        if (svg.closest(".markdown-source-view")) {
+            enhanceNativeSvgLightbox(trigger, plugin, sourcePath);
+        } else {
+            svg.ownerDocument.defaultView?.requestAnimationFrame(() => enhanceNativeSvgLightbox(trigger, plugin, sourcePath));
+        }
     });
 }

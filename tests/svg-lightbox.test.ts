@@ -226,6 +226,22 @@ describe("SVG Lightbox", () => {
         expect(el.querySelector("[data-plantuml-lightbox-trigger]")).toBeNull();
     });
 
+    it("opens the Live Preview fallback when animation frames are suspended", async () => {
+        const callbacks: FrameRequestCallback[] = [];
+        vi.mocked(window.requestAnimationFrame).mockImplementation(callback => {
+            callbacks.push(callback);
+            return callbacks.length;
+        });
+        const {el, svg} = await render(SVG, true);
+
+        click(svg.querySelector("circle") as SVGCircleElement);
+
+        expect(callbacks).toHaveLength(0);
+        expect(document.querySelector("[data-plantuml-lightbox-fallback]")).not.toBeNull();
+        expect(document.querySelector(".plantuml-svg-lightbox-inline")).not.toBeNull();
+        expect(el.querySelector("[data-plantuml-lightbox-trigger]")).toBeNull();
+    });
+
     it("keeps zoom, pan, Escape, and cleanup in the Live Preview fallback", async () => {
         const callbacks: FrameRequestCallback[] = [];
         vi.mocked(window.requestAnimationFrame).mockImplementation(callback => {
@@ -545,9 +561,7 @@ describe("SVG Lightbox", () => {
             cancelable: true,
             button: 0,
         }));
-        expect(lightboxContainer.querySelectorAll("[data-plantuml-lightbox-trigger]")).toHaveLength(1);
-        callbacks.shift()?.(0);
-        callbacks.shift()?.(16);
+        expect(callbacks).toHaveLength(0);
         expect(ownerDocument.querySelector("[data-plantuml-lightbox-fallback]")).not.toBeNull();
         expect(document.querySelector("[data-plantuml-lightbox-fallback]")).toBeNull();
         expect(lightboxContainer.querySelector("[data-plantuml-lightbox-trigger]")).toBeNull();
