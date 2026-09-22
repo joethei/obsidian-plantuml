@@ -336,6 +336,24 @@ describe("SVG Lightbox", () => {
         }
     });
 
+    it("removes Live Preview fallback owner-window listeners when removed externally", async () => {
+        const addEventListener = vi.spyOn(window, "addEventListener");
+        const removeEventListener = vi.spyOn(window, "removeEventListener");
+        const {svg} = await render(SVG, true);
+        click(svg.querySelector("circle") as SVGCircleElement);
+        const lightbox = document.querySelector<HTMLElement>("[data-plantuml-lightbox-fallback]") as HTMLElement;
+        const registrations = addEventListener.mock.calls.filter(([type]) =>
+            ["pointerup", "pointercancel", "blur"].includes(type));
+
+        lightbox.remove();
+        await Promise.resolve();
+
+        expect(registrations).toHaveLength(3);
+        for (const registration of registrations) {
+            expect(removeEventListener).toHaveBeenCalledWith(...registration);
+        }
+    });
+
     it("gives the Live Preview fallback dialog and close control accessible semantics", async () => {
         const {svg} = await render(SVG, true);
         click(svg.querySelector("circle") as SVGCircleElement);

@@ -62,7 +62,7 @@ function createFallbackLightbox(sourceImage: HTMLImageElement): void {
     const applyTransform = () => {
         image.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomLevel})`;
     };
-    let cleanup = () => undefined;
+    let cleanup: () => void = () => undefined;
     const close = () => {
         cleanup();
         lightbox.remove();
@@ -129,12 +129,23 @@ function createFallbackLightbox(sourceImage: HTMLImageElement): void {
     ownerWindow?.addEventListener("pointerup", stopPanning);
     ownerWindow?.addEventListener("pointercancel", stopPanning);
     ownerWindow?.addEventListener("blur", stopPanning);
+    let cleanedUp = false;
+    let lifecycleObserver: MutationObserver | null = null;
     cleanup = () => {
+        if (cleanedUp) return;
+        cleanedUp = true;
         stopPanning();
         ownerWindow?.removeEventListener("pointerup", stopPanning);
         ownerWindow?.removeEventListener("pointercancel", stopPanning);
         ownerWindow?.removeEventListener("blur", stopPanning);
+        lifecycleObserver?.disconnect();
     };
+    if (ownerWindow) {
+        lifecycleObserver = new ownerWindow.MutationObserver(() => {
+            if (!lightbox.isConnected) cleanup();
+        });
+        lifecycleObserver.observe(ownerDocument.body, {childList: true, subtree: true});
+    }
     lightbox.addEventListener("keydown", event => {
         if (event.key === "Tab") {
             const focusable = Array.from(lightbox.querySelectorAll<HTMLElement>(
