@@ -18,9 +18,14 @@ function svgToDataUri(svg: SVGSVGElement): string {
 
 function createFallbackLightbox(sourceImage: HTMLImageElement): void {
     const ownerDocument = sourceImage.ownerDocument;
+    const ownerWindow = ownerDocument.defaultView;
+    const previouslyFocused = ownerDocument.activeElement as HTMLElement | null;
     const lightbox = ownerDocument.createElement("div");
     lightbox.className = "lightbox";
     lightbox.dataset.plantumlLightboxFallback = "true";
+    lightbox.setAttribute("role", "dialog");
+    lightbox.setAttribute("aria-modal", "true");
+    lightbox.setAttribute("aria-label", sourceImage.title || sourceImage.alt || "PlantUML diagram");
     const appendDiv = (parent: HTMLElement, className: string) => {
         const element = ownerDocument.createElement("div");
         element.className = className;
@@ -41,19 +46,30 @@ function createFallbackLightbox(sourceImage: HTMLImageElement): void {
     const titlebar = appendDiv(lightbox, "lightbox-titlebar");
     const titleText = appendDiv(titlebar, "lightbox-titlebar-text");
     titleText.textContent = sourceImage.title || sourceImage.alt;
-    const closeButton = appendDiv(lightbox, "modal-close-button mod-raised clickable-icon");
+    const closeButton = ownerDocument.createElement("button");
+    closeButton.type = "button";
+    closeButton.className = "modal-close-button mod-raised clickable-icon";
     closeButton.setAttribute("aria-label", "Close");
     closeButton.textContent = "×";
+    lightbox.appendChild(closeButton);
     let zoomLevel = 1;
     let panX = 0;
     let panY = 0;
     let isPanning = false;
+    let activePointerId: number | null = null;
     let pointerX = 0;
     let pointerY = 0;
     const applyTransform = () => {
         image.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomLevel})`;
     };
-    const close = () => lightbox.remove();
+    let cleanup = () => undefined;
+    const close = () => {
+        cleanup();
+        lightbox.remove();
+        if (previouslyFocused?.isConnected && typeof previouslyFocused.focus === "function") {
+            previouslyFocused.focus({preventScroll: true});
+        }
+    };
     backdrop.addEventListener("click", close);
     closeButton.addEventListener("click", close);
     media.addEventListener("click", event => {
@@ -73,25 +89,70 @@ function createFallbackLightbox(sourceImage: HTMLImageElement): void {
         applyTransform();
     }, {passive: false});
     media.addEventListener("pointerdown", event => {
-        if (event.target !== image || event.button !== 0 || zoomLevel <= 1) return;
+        if (event.target !== image || event.button !== 0 || zoomLevel <= 1 || isPanning) return;
         isPanning = true;
+        activePointerId = Number.isFinite(event.pointerId) ? event.pointerId : null;
         pointerX = event.clientX;
         pointerY = event.clientY;
+        if (activePointerId !== null) {
+            try {
+                media.setPointerCapture?.(activePointerId);
+            } catch {
+                // Pointer capture is unavailable in older Obsidian/Electron contexts.
+            }
+        }
     });
     media.addEventListener("pointermove", event => {
-        if (!isPanning) return;
+        if (!isPanning || activePointerId !== null && event.pointerId !== activePointerId) return;
         panX += event.clientX - pointerX;
         panY += event.clientY - pointerY;
         pointerX = event.clientX;
         pointerY = event.clientY;
         applyTransform();
     });
-    const stopPanning = () => { isPanning = false; };
+    const stopPanning = (event?: Event) => {
+        if (event && "pointerId" in event && activePointerId !== null
+            && (event as PointerEvent).pointerId !== activePointerId) return;
+        if (activePointerId !== null) {
+            try {
+                if (media.hasPointerCapture?.(activePointerId)) media.releasePointerCapture(activePointerId);
+            } catch {
+                // Capture may already have been released by the browser.
+            }
+        }
+        isPanning = false;
+        activePointerId = null;
+    };
     media.addEventListener("pointerup", stopPanning);
     media.addEventListener("pointercancel", stopPanning);
+    media.addEventListener("lostpointercapture", stopPanning);
+    ownerWindow?.addEventListener("pointerup", stopPanning);
+    ownerWindow?.addEventListener("pointercancel", stopPanning);
+    ownerWindow?.addEventListener("blur", stopPanning);
+    cleanup = () => {
+        stopPanning();
+        ownerWindow?.removeEventListener("pointerup", stopPanning);
+        ownerWindow?.removeEventListener("pointercancel", stopPanning);
+        ownerWindow?.removeEventListener("blur", stopPanning);
+    };
     lightbox.addEventListener("keydown", event => {
+        if (event.key === "Tab") {
+            const focusable = Array.from(lightbox.querySelectorAll<HTMLElement>(
+                'button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])',
+            ));
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (first && last && (event.shiftKey
+                && (ownerDocument.activeElement === first || ownerDocument.activeElement === lightbox)
+                || !event.shiftKey && ownerDocument.activeElement === last)) {
+                event.preventDefault();
+                (event.shiftKey ? last : first).focus({preventScroll: true});
+            }
+            return;
+        }
         if (event.key === "Escape") {
             event.preventDefault();
+            event.stopPropagation();
             close();
         }
     });
