@@ -87,7 +87,9 @@ beforeEach(() => {
     nativeZoom = vi.fn();
     nativeOpen = vi.fn(createNativeLightbox);
     nativeClickHandler = (event: MouseEvent) => {
-        if (event.target instanceof HTMLImageElement && event.target.dataset.plantumlLightboxTrigger === "true") {
+        if (event.target instanceof HTMLImageElement
+            && !event.target.closest(".markdown-source-view")
+            && event.target.dataset.plantumlLightboxTrigger === "true") {
             nativeOpen(event.target);
         }
     };
@@ -103,13 +105,16 @@ afterEach(() => {
     vi.restoreAllMocks();
 });
 
-async function render(svgText = SVG) {
+async function render(svgText = SVG, livePreview = false) {
     const plugin = createPlugin({files: ["Diagrams/Target.md"], settings: {debounce: 0}});
     plugin.serverProcessor = {
         ...fakeProcessor,
         svg: async (_source, el) => insertSvgImage(el, svgText),
     };
-    const el = document.body.createDiv({cls: "markdown-preview-view"});
+    const parent = livePreview
+        ? document.body.createDiv({cls: "markdown-source-view mod-cm6"})
+        : document.body;
+    const el = parent.createDiv({cls: "markdown-preview-view"});
     await new DebouncedProcessors(plugin).svg("A -> B [[[Target#Heading]]]", el, {sourcePath: SOURCE_PATH});
     return {plugin, el, svg: el.querySelector<SVGSVGElement>(":scope > svg") as SVGSVGElement};
 }
@@ -187,14 +192,77 @@ describe("SVG Lightbox", () => {
         expect(callbacks).toHaveLength(1);
         callbacks.shift()?.(0);
         expect(callbacks).toHaveLength(1);
+        callbacks.shift()?.(16);
+        expect(callbacks).toHaveLength(1);
         expect(document.querySelector(".plantuml-svg-lightbox-inline")).toBeNull();
 
         const trigger = el.querySelector<HTMLImageElement>("[data-plantuml-lightbox-trigger]") as HTMLImageElement;
         createNativeLightbox(trigger);
-        callbacks.shift()?.(16);
+        callbacks.shift()?.(32);
 
         expect(document.querySelector(".plantuml-svg-lightbox-inline")).not.toBeNull();
         expect(el.querySelector("[data-plantuml-lightbox-trigger]")).toBeNull();
+    });
+
+    it("opens a Lightbox when Live Preview rejects an image outside its selected image widgets", async () => {
+        const callbacks: FrameRequestCallback[] = [];
+        vi.mocked(window.requestAnimationFrame).mockImplementation(callback => {
+            callbacks.push(callback);
+            return callbacks.length;
+        });
+        const {el, svg} = await render(SVG, true);
+
+        click(svg.querySelector("circle") as SVGCircleElement);
+        for (let frame = 0; frame < 61 && callbacks.length > 0; frame++) {
+            callbacks.shift()?.(frame * 16);
+        }
+
+        expect(nativeOpen).not.toHaveBeenCalled();
+        const fallback = document.querySelector<HTMLElement>("[data-plantuml-lightbox-fallback]") as HTMLElement;
+        expect(fallback.classList.contains("plantuml-svg-lightbox")).toBe(true);
+        expect(fallback.querySelector(".lightbox-titlebar-text")?.textContent).toBe("Sequence flow");
+        expect(fallback.querySelector(".modal-close-button")?.textContent).toBe("×");
+        expect(document.querySelector(".plantuml-svg-lightbox-inline")).not.toBeNull();
+        expect(el.querySelector("[data-plantuml-lightbox-trigger]")).toBeNull();
+    });
+
+    it("keeps zoom, pan, Escape, and cleanup in the Live Preview fallback", async () => {
+        const callbacks: FrameRequestCallback[] = [];
+        vi.mocked(window.requestAnimationFrame).mockImplementation(callback => {
+            callbacks.push(callback);
+            return callbacks.length;
+        });
+        const {svg} = await render(SVG, true);
+
+        click(svg.querySelector("circle") as SVGCircleElement);
+        callbacks.shift()?.(0);
+        callbacks.shift()?.(16);
+        const lightbox = document.querySelector<HTMLElement>("[data-plantuml-lightbox-fallback]") as HTMLElement;
+        const nativeImage = lightbox.querySelector<HTMLImageElement>(".media-wrapper > img") as HTMLImageElement;
+        const clone = lightbox.querySelector<SVGSVGElement>(".plantuml-svg-lightbox-inline") as SVGSVGElement;
+
+        nativeImage.dispatchEvent(new MouseEvent("dblclick", {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+            clientX: 50,
+            clientY: 25,
+        }));
+        await Promise.resolve();
+        expect(nativeImage.style.transform).toContain("scale(2)");
+        expect(clone.style.transform).toBe(nativeImage.style.transform);
+
+        nativeImage.dispatchEvent(new MouseEvent("pointerdown", {bubbles: true, button: 0, clientX: 10, clientY: 10}));
+        nativeImage.dispatchEvent(new MouseEvent("pointermove", {bubbles: true, button: 0, clientX: 35, clientY: 30}));
+        nativeImage.dispatchEvent(new MouseEvent("pointerup", {bubbles: true, button: 0, clientX: 35, clientY: 30}));
+        await Promise.resolve();
+        expect(nativeImage.style.transform).toContain("translate(25px, 20px)");
+        expect(clone.style.transform).toBe(nativeImage.style.transform);
+
+        lightbox.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape", bubbles: true, cancelable: true}));
+        await Promise.resolve();
+        expect(lightbox.isConnected).toBe(false);
+        expect(ResizeObserverStub.instances.every(observer => observer.targets.length === 0)).toBe(true);
     });
 
     it("keeps note links clickable without opening the Lightbox", async () => {
@@ -435,7 +503,11 @@ describe("SVG Lightbox", () => {
         document.body.appendChild(iframe);
         const ownerDocument = iframe.contentDocument as Document;
         const ownerWindow = iframe.contentWindow as Window & typeof globalThis;
-        ownerWindow.requestAnimationFrame = vi.fn(() => 1);
+        const callbacks: FrameRequestCallback[] = [];
+        ownerWindow.requestAnimationFrame = vi.fn(callback => {
+            callbacks.push(callback);
+            return callbacks.length;
+        });
         const plugin = createPlugin({files: ["Diagrams/Target.md"], settings: {debounce: 0}});
 
         const readingContainer = ownerDocument.createElement("div");
@@ -451,9 +523,12 @@ describe("SVG Lightbox", () => {
         }));
         expect(plugin.app.workspace.openLinkText).toHaveBeenCalledWith("Target#Heading", SOURCE_PATH, false);
 
+        const sourceView = ownerDocument.createElement("div");
+        sourceView.className = "markdown-source-view mod-cm6";
+        ownerDocument.body.appendChild(sourceView);
         const lightboxContainer = ownerDocument.createElement("div");
         lightboxContainer.innerHTML = SVG;
-        ownerDocument.body.appendChild(lightboxContainer);
+        sourceView.appendChild(lightboxContainer);
         registerSvgLightbox(lightboxContainer, plugin, SOURCE_PATH);
         registerSvgLightbox(lightboxContainer, plugin, SOURCE_PATH);
         const svg = lightboxContainer.querySelector("svg") as SVGSVGElement;
@@ -471,6 +546,11 @@ describe("SVG Lightbox", () => {
             button: 0,
         }));
         expect(lightboxContainer.querySelectorAll("[data-plantuml-lightbox-trigger]")).toHaveLength(1);
+        callbacks.shift()?.(0);
+        callbacks.shift()?.(16);
+        expect(ownerDocument.querySelector("[data-plantuml-lightbox-fallback]")).not.toBeNull();
+        expect(document.querySelector("[data-plantuml-lightbox-fallback]")).toBeNull();
+        expect(lightboxContainer.querySelector("[data-plantuml-lightbox-trigger]")).toBeNull();
     });
 
     it("shrinks wide note SVGs without enlarging small ones and styles only the Lightbox clone for selection", () => {

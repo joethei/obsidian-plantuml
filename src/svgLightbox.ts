@@ -16,6 +16,91 @@ function svgToDataUri(svg: SVGSVGElement): string {
     return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(new XMLSerializer().serializeToString(svg));
 }
 
+function createFallbackLightbox(sourceImage: HTMLImageElement): void {
+    const ownerDocument = sourceImage.ownerDocument;
+    const lightbox = ownerDocument.createElement("div");
+    lightbox.className = "lightbox";
+    lightbox.dataset.plantumlLightboxFallback = "true";
+    const appendDiv = (parent: HTMLElement, className: string) => {
+        const element = ownerDocument.createElement("div");
+        element.className = className;
+        parent.appendChild(element);
+        return element;
+    };
+    const backdrop = appendDiv(lightbox, "lightbox-bg");
+    const content = appendDiv(lightbox, "lightbox-content");
+    const media = appendDiv(content, "lightbox-media");
+    const wrapper = appendDiv(media, "media-wrapper");
+    const image = ownerDocument.createElement("img");
+    image.src = sourceImage.src;
+    image.alt = sourceImage.alt;
+    image.title = sourceImage.title;
+    image.draggable = false;
+    image.decoding = "async";
+    wrapper.appendChild(image);
+    const titlebar = appendDiv(lightbox, "lightbox-titlebar");
+    const titleText = appendDiv(titlebar, "lightbox-titlebar-text");
+    titleText.textContent = sourceImage.title || sourceImage.alt;
+    const closeButton = appendDiv(lightbox, "modal-close-button mod-raised clickable-icon");
+    closeButton.setAttribute("aria-label", "Close");
+    closeButton.textContent = "×";
+    let zoomLevel = 1;
+    let panX = 0;
+    let panY = 0;
+    let isPanning = false;
+    let pointerX = 0;
+    let pointerY = 0;
+    const applyTransform = () => {
+        image.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomLevel})`;
+    };
+    const close = () => lightbox.remove();
+    backdrop.addEventListener("click", close);
+    closeButton.addEventListener("click", close);
+    media.addEventListener("click", event => {
+        if (event.target !== image) close();
+    });
+    media.addEventListener("dblclick", event => {
+        if (event.target !== image) return;
+        zoomLevel = zoomLevel === 1 ? 2 : 1;
+        if (zoomLevel === 1) panX = panY = 0;
+        applyTransform();
+    });
+    media.addEventListener("wheel", event => {
+        if (event.target !== image || !(event.ctrlKey || event.metaKey)) return;
+        event.preventDefault();
+        zoomLevel = Math.min(10, Math.max(1, zoomLevel * (event.deltaY < 0 ? 1.2 : 1 / 1.2)));
+        if (zoomLevel === 1) panX = panY = 0;
+        applyTransform();
+    }, {passive: false});
+    media.addEventListener("pointerdown", event => {
+        if (event.target !== image || event.button !== 0 || zoomLevel <= 1) return;
+        isPanning = true;
+        pointerX = event.clientX;
+        pointerY = event.clientY;
+    });
+    media.addEventListener("pointermove", event => {
+        if (!isPanning) return;
+        panX += event.clientX - pointerX;
+        panY += event.clientY - pointerY;
+        pointerX = event.clientX;
+        pointerY = event.clientY;
+        applyTransform();
+    });
+    const stopPanning = () => { isPanning = false; };
+    media.addEventListener("pointerup", stopPanning);
+    media.addEventListener("pointercancel", stopPanning);
+    lightbox.addEventListener("keydown", event => {
+        if (event.key === "Escape") {
+            event.preventDefault();
+            close();
+        }
+    });
+    lightbox.tabIndex = -1;
+    applyTransform();
+    ownerDocument.body.appendChild(lightbox);
+    lightbox.focus({preventScroll: true});
+}
+
 function estimateTextLength(text: string, fontSize: number): number {
     return Array.from(text).reduce((length, character) =>
         length + fontSize * ((character.codePointAt(0) ?? 0) <= 0xff ? 0.6 : 1), 0);
@@ -102,8 +187,14 @@ function enhanceNativeSvgLightbox(sourceImage: PlantumlLightboxTrigger, plugin: 
         !candidate.classList.contains("plantuml-svg-lightbox")
         && candidate.querySelector<HTMLImageElement>(".lightbox-media .media-wrapper img")?.src === sourceImage.src);
     if (!lightbox) {
-        if (attempts < 60 && sourceImage.isConnected) {
+        // Obsidian 1.13.7 registers no media-click callback for Live Preview's
+        // .markdown-source-view, so its dynamically appended trigger cannot open the native Lightbox.
+        const fallbackAfterAttempts = sourceImage.closest(".markdown-source-view") ? 1 : 60;
+        if (attempts < fallbackAfterAttempts && sourceImage.isConnected) {
             ownerWindow.requestAnimationFrame(() => enhanceNativeSvgLightbox(sourceImage, plugin, sourcePath, attempts + 1));
+        } else if (sourceImage.isConnected) {
+            createFallbackLightbox(sourceImage);
+            enhanceNativeSvgLightbox(sourceImage, plugin, sourcePath, attempts + 1);
         } else {
             sourceImage.remove();
         }
