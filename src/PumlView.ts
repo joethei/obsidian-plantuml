@@ -226,6 +226,6 @@ export class PumlView extends TextFileView {
         // reuse the element, so that re-rendering is debounced
         this.previewDiv ??= this.previewEl.createDiv();
 
-        await this.plugin.debouncedProcessor.png(this.getViewData(), this.previewDiv, {sourcePath: this.file.path});
+        await this.plugin.debouncedProcessor.default(this.getViewData(), this.previewDiv, {sourcePath: this.file.path});
     }
 }

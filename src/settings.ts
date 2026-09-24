@@ -1,6 +1,8 @@
 import { Platform, PluginSettingTab, SettingDefinitionItem } from "obsidian";
 import PlantumlPlugin from "./main";
 
+export type ImageFormat = "png" | "svg";
+
 export interface PlantUMLSettings {
     server_url: string,
     header: string;
@@ -8,7 +10,8 @@ export interface PlantUMLSettings {
     localJar: string;
     javaPath: string;
     dotPath: string;
-    defaultProcessor: string;
+    defaultProcessor: ImageFormat;
+    codeBlockProcessor: ImageFormat;
     cache: number;
     exportPath: string;
     lightHeader: string;
@@ -23,6 +26,7 @@ export const DEFAULT_SETTINGS: PlantUMLSettings = {
     javaPath: 'java',
     dotPath: '',
     defaultProcessor: "png",
+    codeBlockProcessor: "png",
     cache: 60,
     exportPath: '',
     lightHeader: '',
@@ -99,6 +103,19 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
                     type: 'dropdown',
                     key: 'defaultProcessor',
                     defaultValue: DEFAULT_SETTINGS.defaultProcessor,
+                    options: {
+                        png: 'PNG',
+                        svg: 'SVG',
+                    }
+                }
+            },
+            {
+                name: 'Default processor for code blocks',
+                desc: 'PlantUML and puml code blocks will use this processor.',
+                control: {
+                    type: 'dropdown',
+                    key: 'codeBlockProcessor',
+                    defaultValue: DEFAULT_SETTINGS.codeBlockProcessor,
                     options: {
                         png: 'PNG',
                         svg: 'SVG',
