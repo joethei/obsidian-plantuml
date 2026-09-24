@@ -2,6 +2,7 @@ import { debounce, Debouncer, HoverParent, Keymap, Menu, Notice, TFile } from "o
 import PlantumlPlugin from "../main";
 import { Processor, ProcessorContext } from "./processor";
 import { getInternalLinkText, insertErrorMessage, serializeSvg } from "../functions";
+import { registerSvgLightbox } from "../svgLightbox";
 
 export class DebouncedProcessors implements Processor {
 
@@ -63,7 +64,9 @@ export class DebouncedProcessors implements Processor {
 
         const render = async (source: string, el: HTMLElement, ctx: ProcessorContext) => {
             try {
-                await this.renderStates.get(el)?.processor(source, el, ctx);
+                const renderState = this.renderStates.get(el);
+                await renderState?.processor(source, el, ctx);
+                if (renderState?.filetype === "svg") registerSvgLightbox(el, this.plugin, ctx.sourcePath);
             } catch (error) {
                 console.error("PlantUML: failed to render diagram", error);
                 insertErrorMessage(el, error);
@@ -173,7 +176,8 @@ export class DebouncedProcessors implements Processor {
         const hoverParent: HoverParent = {hoverPopover: null};
 
         const getLink = (event: MouseEvent) => {
-            const target = event.target instanceof Element ? event.target.closest("a, area") : null;
+            const Element = el.ownerDocument.defaultView?.Element;
+            const target = Element && event.target instanceof Element ? event.target.closest("a, area") : null;
             if (!target || !el.contains(target)) return null;
             const linkText = getInternalLinkText(target, this.plugin.app.vault.getName());
             if (linkText === null) return null;

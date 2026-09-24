@@ -1,0 +1,798 @@
+import {readFileSync} from "fs";
+import {resolve} from "path";
+import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
+import {Keymap, Menu, Notice, ResizeObserverStub} from "obsidian";
+import {DebouncedProcessors} from "../src/processors/debouncedProcessors";
+import {insertSvgImage} from "../src/functions";
+import type {Processor} from "../src/processors/processor";
+import {registerSvgLightbox} from "../src/svgLightbox";
+import {createPlugin} from "./helpers";
+
+const SOURCE_PATH = "Diagrams/Sequence.md";
+const SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100">
+    <title>Sequence flow</title>
+    <style>.label { fill: #181818; font-family: sans-serif; font-size: 14px; }</style>
+    <script>alert(1)</script>
+    <rect width="200" height="100" onclick="alert(1)" />
+    <circle cx="180" cy="80" r="10" />
+    <a href="Target#Heading"><text class="label" x="10" y="30">Open target</text></a>
+    <text class="label" x="10" y="60">Alice</text>
+    <a href="https://example.com"><text class="label" x="10" y="90">External</text></a>
+</svg>`;
+
+const fakeProcessor: Processor = {
+    svg: async (_source, el) => insertSvgImage(el, SVG),
+    png: async () => undefined,
+    ascii: async () => undefined,
+};
+
+let nativeOpen: ReturnType<typeof vi.fn>;
+let nativeZoom: ReturnType<typeof vi.fn>;
+let nativeClickHandler: (event: MouseEvent) => void;
+
+function createNativeLightbox(source: HTMLImageElement) {
+    const ownerDocument = source.ownerDocument;
+    const lightbox = ownerDocument.createElement("div");
+    lightbox.className = "lightbox";
+    const backdrop = ownerDocument.createElement("div");
+    backdrop.className = "lightbox-bg";
+    const content = ownerDocument.createElement("div");
+    content.className = "lightbox-content";
+    const media = ownerDocument.createElement("div");
+    media.className = "lightbox-media";
+    const wrapper = ownerDocument.createElement("div");
+    wrapper.className = "media-wrapper";
+    const image = ownerDocument.createElement("img");
+    image.src = source.src;
+    image.alt = source.alt;
+    image.title = source.title;
+    image.style.transform = "translate(0px, 0px) scale(1)";
+    const close = ownerDocument.createElement("button");
+    close.className = "modal-close-button";
+    close.textContent = "Close";
+    wrapper.appendChild(image);
+    media.appendChild(wrapper);
+    content.appendChild(media);
+    content.appendChild(close);
+    lightbox.appendChild(backdrop);
+    lightbox.appendChild(content);
+    ownerDocument.body.appendChild(lightbox);
+
+    const remove = () => lightbox.remove();
+    backdrop.addEventListener("click", remove);
+    close.addEventListener("click", remove);
+    media.addEventListener("click", event => {
+        if (event.target !== image) remove();
+    });
+    const zoom = () => {
+        const transform = image.style.transform;
+        const translate = transform.match(/translate\([^)]*\)/)?.[0] ?? "translate(0px, 0px)";
+        const scale = Number(transform.match(/scale\(([^)]+)\)/)?.[1] ?? "1") + 1;
+        nativeZoom();
+        image.style.transform = `${translate} scale(${scale})`;
+    };
+    media.addEventListener("dblclick", event => {
+        if (event.target === image) zoom();
+    });
+    media.addEventListener("wheel", event => {
+        if (event.target !== image || !(event.ctrlKey || event.metaKey)) return;
+        event.preventDefault();
+        zoom();
+    });
+    return lightbox;
+}
+
+beforeEach(() => {
+    ResizeObserverStub.instances = [];
+    nativeZoom = vi.fn();
+    nativeOpen = vi.fn(createNativeLightbox);
+    nativeClickHandler = (event: MouseEvent) => {
+        if (event.target instanceof HTMLImageElement
+            && !event.target.closest(".markdown-source-view")
+            && event.target.dataset.plantumlLightboxTrigger === "true") {
+            nativeOpen(event.target);
+        }
+    };
+    document.addEventListener("click", nativeClickHandler);
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => {
+        callback(0);
+        return 1;
+    });
+});
+
+afterEach(() => {
+    document.removeEventListener("click", nativeClickHandler);
+    vi.restoreAllMocks();
+});
+
+async function render(svgText = SVG, livePreview = false) {
+    const plugin = createPlugin({files: ["Diagrams/Target.md"], settings: {debounce: 0}});
+    plugin.serverProcessor = {
+        ...fakeProcessor,
+        svg: async (_source, el) => insertSvgImage(el, svgText),
+    };
+    const parent = livePreview
+        ? document.body.createDiv({cls: "markdown-source-view mod-cm6"})
+        : document.body;
+    const el = parent.createDiv({cls: "markdown-preview-view"});
+    await new DebouncedProcessors(plugin).svg("A -> B [[[Target#Heading]]]", el, {sourcePath: SOURCE_PATH});
+    return {plugin, el, svg: el.querySelector<SVGSVGElement>(":scope > svg") as SVGSVGElement};
+}
+
+async function openLightbox() {
+    return openLightboxFromSvg(SVG);
+}
+
+async function openLightboxFromSvg(svgText: string) {
+    const rendered = await render(svgText);
+    click(rendered.svg.querySelector("circle") as SVGCircleElement);
+    const lightbox = document.querySelector<HTMLElement>(".lightbox") as HTMLElement;
+    const clone = lightbox.querySelector<SVGSVGElement>(".plantuml-svg-lightbox-inline") as SVGSVGElement;
+    return {...rendered, lightbox, clone};
+}
+
+function click(target: Element) {
+    const event = new MouseEvent("click", {bubbles: true, cancelable: true, button: 0});
+    target.dispatchEvent(event);
+    return event;
+}
+
+function selectText(element: Element, start: number, end: number) {
+    const text = element.firstChild as Text;
+    const range = document.createRange();
+    range.setStart(text, start);
+    range.setEnd(text, end);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+}
+
+describe("SVG Lightbox", () => {
+    it("keeps the Reading-view SVG inline and opens one native Lightbox with a sanitized inline clone", async () => {
+        const {el, svg} = await render();
+
+        expect(svg).not.toBeNull();
+        expect(el.querySelector(":scope > img")).toBeNull();
+        click(svg.querySelector("circle") as SVGCircleElement);
+
+        expect(nativeOpen).toHaveBeenCalledOnce();
+        expect(el.querySelector(":scope > svg")).toBe(svg);
+        expect(el.querySelector(":scope > img")).toBeNull();
+
+        const lightbox = document.querySelector<HTMLElement>(".lightbox");
+        const nativeImage = lightbox?.querySelector<HTMLImageElement>(".media-wrapper > img");
+        const clone = lightbox?.querySelector<SVGSVGElement>(".plantuml-svg-lightbox-inline");
+        expect(lightbox?.classList.contains("plantuml-svg-lightbox")).toBe(true);
+        expect(lightbox?.querySelector(".lightbox-bg")).not.toBeNull();
+        expect(lightbox?.querySelector(".lightbox-media")).not.toBeNull();
+        expect(lightbox?.querySelector(".modal-close-button")).not.toBeNull();
+        expect(nativeImage?.alt).toBe("PlantUML diagram");
+        expect(nativeImage?.title).toBe("Sequence flow");
+        expect(nativeImage?.alt).not.toContain("%3Csvg");
+        expect(clone).not.toBeNull();
+        expect(clone?.getAttribute("preserveAspectRatio")).toBe("xMidYMid meet");
+        expect(clone?.querySelector("script")).toBeNull();
+        expect(clone?.querySelector("rect")?.hasAttribute("onclick")).toBe(false);
+        expect(clone?.querySelector("style")).not.toBeNull();
+
+        click(lightbox?.querySelector(".modal-close-button") as HTMLButtonElement);
+        expect(document.querySelector(".lightbox")).toBeNull();
+    });
+
+    it("waits for delayed native Lightbox creation", async () => {
+        const callbacks: FrameRequestCallback[] = [];
+        vi.mocked(window.requestAnimationFrame).mockImplementation(callback => {
+            callbacks.push(callback);
+            return callbacks.length;
+        });
+        nativeOpen.mockImplementation(() => undefined);
+        const {el, svg} = await render();
+
+        click(svg.querySelector("circle") as SVGCircleElement);
+        expect(callbacks).toHaveLength(1);
+        callbacks.shift()?.(0);
+        expect(callbacks).toHaveLength(1);
+        callbacks.shift()?.(16);
+        expect(callbacks).toHaveLength(1);
+        expect(document.querySelector(".plantuml-svg-lightbox-inline")).toBeNull();
+
+        const trigger = el.querySelector<HTMLImageElement>("[data-plantuml-lightbox-trigger]") as HTMLImageElement;
+        createNativeLightbox(trigger);
+        callbacks.shift()?.(32);
+
+        expect(document.querySelector(".plantuml-svg-lightbox-inline")).not.toBeNull();
+        expect(el.querySelector("[data-plantuml-lightbox-trigger]")).toBeNull();
+    });
+
+    it("opens a Lightbox when Live Preview rejects an image outside its selected image widgets", async () => {
+        const callbacks: FrameRequestCallback[] = [];
+        vi.mocked(window.requestAnimationFrame).mockImplementation(callback => {
+            callbacks.push(callback);
+            return callbacks.length;
+        });
+        const {el, svg} = await render(SVG, true);
+
+        click(svg.querySelector("circle") as SVGCircleElement);
+        for (let frame = 0; frame < 61 && callbacks.length > 0; frame++) {
+            callbacks.shift()?.(frame * 16);
+        }
+
+        expect(nativeOpen).not.toHaveBeenCalled();
+        const fallback = document.querySelector<HTMLElement>("[data-plantuml-lightbox-fallback]") as HTMLElement;
+        expect(fallback.classList.contains("plantuml-svg-lightbox")).toBe(true);
+        expect(fallback.querySelector(".lightbox-titlebar-text")?.textContent).toBe("Sequence flow");
+        expect(fallback.querySelector(".modal-close-button")?.textContent).toBe("×");
+        expect(document.querySelector(".plantuml-svg-lightbox-inline")).not.toBeNull();
+        expect(el.querySelector("[data-plantuml-lightbox-trigger]")).toBeNull();
+    });
+
+    it("opens the Live Preview fallback when animation frames are suspended", async () => {
+        const callbacks: FrameRequestCallback[] = [];
+        vi.mocked(window.requestAnimationFrame).mockImplementation(callback => {
+            callbacks.push(callback);
+            return callbacks.length;
+        });
+        const {el, svg} = await render(SVG, true);
+
+        click(svg.querySelector("circle") as SVGCircleElement);
+
+        expect(callbacks).toHaveLength(0);
+        expect(document.querySelector("[data-plantuml-lightbox-fallback]")).not.toBeNull();
+        expect(document.querySelector(".plantuml-svg-lightbox-inline")).not.toBeNull();
+        expect(el.querySelector("[data-plantuml-lightbox-trigger]")).toBeNull();
+    });
+
+    it.each(["pointerup", "pointercancel", "blur", "lostpointercapture"])(
+        "stops Live Preview fallback panning after %s outside the media",
+        async (terminationEvent) => {
+            const {svg} = await render(SVG, true);
+            click(svg.querySelector("circle") as SVGCircleElement);
+            const lightbox = document.querySelector<HTMLElement>("[data-plantuml-lightbox-fallback]") as HTMLElement;
+            const media = lightbox.querySelector<HTMLElement>(".lightbox-media") as HTMLElement;
+            const nativeImage = lightbox.querySelector<HTMLImageElement>(".media-wrapper > img") as HTMLImageElement;
+
+            nativeImage.dispatchEvent(new MouseEvent("dblclick", {bubbles: true, button: 0}));
+            nativeImage.dispatchEvent(new MouseEvent("pointerdown", {
+                bubbles: true,
+                button: 0,
+                clientX: 10,
+                clientY: 10,
+            }));
+            const terminationTarget: EventTarget = terminationEvent === "lostpointercapture" ? media : window;
+            terminationTarget.dispatchEvent(new Event(terminationEvent, {bubbles: true}));
+            nativeImage.dispatchEvent(new MouseEvent("pointermove", {
+                bubbles: true,
+                button: 0,
+                clientX: 35,
+                clientY: 30,
+            }));
+
+            expect(nativeImage.style.transform).toContain("translate(0px, 0px)");
+        },
+    );
+
+    it("keeps the active fallback pan when another pointer presses and releases", async () => {
+        const {svg} = await render(SVG, true);
+        click(svg.querySelector("circle") as SVGCircleElement);
+        const lightbox = document.querySelector<HTMLElement>("[data-plantuml-lightbox-fallback]") as HTMLElement;
+        const nativeImage = lightbox.querySelector<HTMLImageElement>(".media-wrapper > img") as HTMLImageElement;
+        const pointerEvent = (type: string, pointerId: number, clientX: number, clientY: number) => {
+            const event = new MouseEvent(type, {bubbles: true, button: 0, clientX, clientY});
+            Object.defineProperty(event, "pointerId", {value: pointerId});
+            return event;
+        };
+
+        nativeImage.dispatchEvent(new MouseEvent("dblclick", {bubbles: true, button: 0}));
+        nativeImage.dispatchEvent(pointerEvent("pointerdown", 7, 10, 10));
+        nativeImage.dispatchEvent(pointerEvent("pointerdown", 8, 50, 50));
+        window.dispatchEvent(pointerEvent("pointerup", 8, 50, 50));
+        nativeImage.dispatchEvent(pointerEvent("pointermove", 7, 35, 30));
+
+        expect(nativeImage.style.transform).toContain("translate(25px, 20px)");
+
+        window.dispatchEvent(pointerEvent("pointerup", 7, 35, 30));
+        nativeImage.dispatchEvent(pointerEvent("pointermove", 7, 50, 50));
+        expect(nativeImage.style.transform).toContain("translate(25px, 20px)");
+    });
+
+    it("uses pointer capture when the Live Preview fallback supports it", async () => {
+        const {svg} = await render(SVG, true);
+        click(svg.querySelector("circle") as SVGCircleElement);
+        const lightbox = document.querySelector<HTMLElement>("[data-plantuml-lightbox-fallback]") as HTMLElement;
+        const media = lightbox.querySelector<HTMLElement>(".lightbox-media") as HTMLElement;
+        const nativeImage = lightbox.querySelector<HTMLImageElement>(".media-wrapper > img") as HTMLImageElement;
+        const setPointerCapture = vi.fn();
+        const releasePointerCapture = vi.fn();
+        media.setPointerCapture = setPointerCapture;
+        media.hasPointerCapture = vi.fn(() => true);
+        media.releasePointerCapture = releasePointerCapture;
+
+        nativeImage.dispatchEvent(new MouseEvent("dblclick", {bubbles: true, button: 0}));
+        const pointerDown = new MouseEvent("pointerdown", {bubbles: true, button: 0});
+        Object.defineProperty(pointerDown, "pointerId", {value: 7});
+        nativeImage.dispatchEvent(pointerDown);
+        const pointerUp = new MouseEvent("pointerup", {bubbles: true, button: 0});
+        Object.defineProperty(pointerUp, "pointerId", {value: 7});
+        window.dispatchEvent(pointerUp);
+
+        expect(setPointerCapture).toHaveBeenCalledWith(7);
+        expect(releasePointerCapture).toHaveBeenCalledWith(7);
+    });
+
+    it("removes Live Preview fallback owner-window listeners when closed", async () => {
+        const addEventListener = vi.spyOn(window, "addEventListener");
+        const removeEventListener = vi.spyOn(window, "removeEventListener");
+        const {svg} = await render(SVG, true);
+        click(svg.querySelector("circle") as SVGCircleElement);
+        const lightbox = document.querySelector<HTMLElement>("[data-plantuml-lightbox-fallback]") as HTMLElement;
+        const registrations = addEventListener.mock.calls.filter(([type]) =>
+            ["pointerup", "pointercancel", "blur"].includes(type));
+
+        click(lightbox.querySelector(".modal-close-button") as HTMLButtonElement);
+
+        expect(registrations).toHaveLength(3);
+        for (const registration of registrations) {
+            expect(removeEventListener).toHaveBeenCalledWith(...registration);
+        }
+    });
+
+    it("removes Live Preview fallback owner-window listeners when removed externally", async () => {
+        const addEventListener = vi.spyOn(window, "addEventListener");
+        const removeEventListener = vi.spyOn(window, "removeEventListener");
+        const {svg} = await render(SVG, true);
+        click(svg.querySelector("circle") as SVGCircleElement);
+        const lightbox = document.querySelector<HTMLElement>("[data-plantuml-lightbox-fallback]") as HTMLElement;
+        const registrations = addEventListener.mock.calls.filter(([type]) =>
+            ["pointerup", "pointercancel", "blur"].includes(type));
+
+        lightbox.remove();
+        await Promise.resolve();
+
+        expect(registrations).toHaveLength(3);
+        for (const registration of registrations) {
+            expect(removeEventListener).toHaveBeenCalledWith(...registration);
+        }
+    });
+
+    it("gives the Live Preview fallback dialog and close control accessible semantics", async () => {
+        const {svg} = await render(SVG, true);
+        click(svg.querySelector("circle") as SVGCircleElement);
+        const lightbox = document.querySelector<HTMLElement>("[data-plantuml-lightbox-fallback]") as HTMLElement;
+        const closeButton = lightbox.querySelector<HTMLButtonElement>(".modal-close-button") as HTMLButtonElement;
+
+        expect(lightbox.getAttribute("role")).toBe("dialog");
+        expect(lightbox.getAttribute("aria-modal")).toBe("true");
+        expect(lightbox.getAttribute("aria-label")).toBe("Sequence flow");
+        expect(closeButton.tagName).toBe("BUTTON");
+        expect(closeButton.type).toBe("button");
+        expect(closeButton.getAttribute("aria-label")).toBe("Close");
+    });
+
+    it("keeps keyboard focus inside the modal Live Preview fallback", async () => {
+        const {svg} = await render(SVG, true);
+        click(svg.querySelector("circle") as SVGCircleElement);
+        const lightbox = document.querySelector<HTMLElement>("[data-plantuml-lightbox-fallback]") as HTMLElement;
+        const clone = lightbox.querySelector<SVGSVGElement>(".plantuml-svg-lightbox-inline") as SVGSVGElement;
+        const closeButton = lightbox.querySelector<HTMLButtonElement>(".modal-close-button") as HTMLButtonElement;
+
+        closeButton.focus();
+        const tab = new KeyboardEvent("keydown", {key: "Tab", bubbles: true, cancelable: true});
+        closeButton.dispatchEvent(tab);
+        expect(tab.defaultPrevented).toBe(true);
+        expect(document.activeElement).toBe(clone);
+
+        const shiftTab = new KeyboardEvent("keydown", {
+            key: "Tab",
+            shiftKey: true,
+            bubbles: true,
+            cancelable: true,
+        });
+        clone.dispatchEvent(shiftTab);
+        expect(shiftTab.defaultPrevented).toBe(true);
+        expect(document.activeElement).toBe(closeButton);
+    });
+
+    it("wraps backward focus from the Live Preview fallback dialog itself", async () => {
+        const {svg} = await render(SVG, true);
+        click(svg.querySelector("circle") as SVGCircleElement);
+        const lightbox = document.querySelector<HTMLElement>("[data-plantuml-lightbox-fallback]") as HTMLElement;
+        const closeButton = lightbox.querySelector<HTMLButtonElement>(".modal-close-button") as HTMLButtonElement;
+        lightbox.focus();
+        const shiftTab = new KeyboardEvent("keydown", {
+            key: "Tab",
+            shiftKey: true,
+            bubbles: true,
+            cancelable: true,
+        });
+
+        lightbox.dispatchEvent(shiftTab);
+
+        expect(shiftTab.defaultPrevented).toBe(true);
+        expect(document.activeElement).toBe(closeButton);
+    });
+
+    it("restores focus after the Live Preview fallback closes", async () => {
+        const previousFocus = document.body.createEl("button");
+        previousFocus.focus();
+        const {svg} = await render(SVG, true);
+        click(svg.querySelector("circle") as SVGCircleElement);
+        const lightbox = document.querySelector<HTMLElement>("[data-plantuml-lightbox-fallback]") as HTMLElement;
+
+        expect(lightbox.contains(document.activeElement)).toBe(true);
+        click(lightbox.querySelector(".modal-close-button") as HTMLButtonElement);
+
+        expect(document.activeElement).toBe(previousFocus);
+    });
+
+    it("does not restore focus to a disconnected element", async () => {
+        const previousFocus = document.body.createEl("button");
+        previousFocus.focus();
+        const focus = vi.spyOn(previousFocus, "focus");
+        const {svg} = await render(SVG, true);
+        click(svg.querySelector("circle") as SVGCircleElement);
+        const lightbox = document.querySelector<HTMLElement>("[data-plantuml-lightbox-fallback]") as HTMLElement;
+
+        previousFocus.remove();
+        click(lightbox.querySelector(".modal-close-button") as HTMLButtonElement);
+
+        expect(focus).not.toHaveBeenCalled();
+    });
+
+    it("contains Escape handling inside the Live Preview fallback", async () => {
+        const hostEscapeHandler = vi.fn();
+        document.addEventListener("keydown", hostEscapeHandler);
+        const {svg} = await render(SVG, true);
+        click(svg.querySelector("circle") as SVGCircleElement);
+        const lightbox = document.querySelector<HTMLElement>("[data-plantuml-lightbox-fallback]") as HTMLElement;
+        const escape = new KeyboardEvent("keydown", {key: "Escape", bubbles: true, cancelable: true});
+
+        lightbox.dispatchEvent(escape);
+
+        expect(escape.defaultPrevented).toBe(true);
+        expect(hostEscapeHandler).not.toHaveBeenCalled();
+        expect(lightbox.isConnected).toBe(false);
+        document.removeEventListener("keydown", hostEscapeHandler);
+    });
+
+    it("keeps zoom, pan, Escape, and cleanup in the Live Preview fallback", async () => {
+        const callbacks: FrameRequestCallback[] = [];
+        vi.mocked(window.requestAnimationFrame).mockImplementation(callback => {
+            callbacks.push(callback);
+            return callbacks.length;
+        });
+        const {svg} = await render(SVG, true);
+
+        click(svg.querySelector("circle") as SVGCircleElement);
+        callbacks.shift()?.(0);
+        callbacks.shift()?.(16);
+        const lightbox = document.querySelector<HTMLElement>("[data-plantuml-lightbox-fallback]") as HTMLElement;
+        const nativeImage = lightbox.querySelector<HTMLImageElement>(".media-wrapper > img") as HTMLImageElement;
+        const clone = lightbox.querySelector<SVGSVGElement>(".plantuml-svg-lightbox-inline") as SVGSVGElement;
+
+        nativeImage.dispatchEvent(new MouseEvent("dblclick", {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+            clientX: 50,
+            clientY: 25,
+        }));
+        await Promise.resolve();
+        expect(nativeImage.style.transform).toContain("scale(2)");
+        expect(clone.style.transform).toBe(nativeImage.style.transform);
+
+        nativeImage.dispatchEvent(new MouseEvent("pointerdown", {bubbles: true, button: 0, clientX: 10, clientY: 10}));
+        nativeImage.dispatchEvent(new MouseEvent("pointermove", {bubbles: true, button: 0, clientX: 35, clientY: 30}));
+        nativeImage.dispatchEvent(new MouseEvent("pointerup", {bubbles: true, button: 0, clientX: 35, clientY: 30}));
+        await Promise.resolve();
+        expect(nativeImage.style.transform).toContain("translate(25px, 20px)");
+        expect(clone.style.transform).toBe(nativeImage.style.transform);
+
+        lightbox.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape", bubbles: true, cancelable: true}));
+        await Promise.resolve();
+        expect(lightbox.isConnected).toBe(false);
+        expect(ResizeObserverStub.instances.every(observer => observer.targets.length === 0)).toBe(true);
+    });
+
+    it("keeps note links clickable without opening the Lightbox", async () => {
+        const {plugin, svg} = await render();
+
+        const event = click(svg.querySelector("a text") as SVGTextElement);
+
+        expect(nativeOpen).not.toHaveBeenCalled();
+        expect(event.defaultPrevented).toBe(true);
+        expect(plugin.app.workspace.openLinkText).toHaveBeenCalledWith("Target#Heading", SOURCE_PATH, false);
+        expect(document.querySelector(".lightbox")).toBeNull();
+    });
+
+    it("rejects encoded unsafe targets in the real sanitized Lightbox click path", async () => {
+        const maliciousTargets = [
+            "%6a%61%76%61%73%63%72%69%70%74%3aalert(1)",
+            "%66%69%6c%65%3a///etc/passwd",
+            "%64%61%74%61%3atext/html,unsafe",
+            "%6f%62%73%69%64%69%61%6e%3a//open?vault=Test%20Vault&amp;file=Target",
+            "%2f%2funsafe.example/path",
+            "java%0ascript:alert(1)",
+            "%E0%A4%A",
+        ];
+        const links = maliciousTargets.map((href, index) =>
+            `<a id="unsafe-${index}" href="${href}"><text x="10" y="${20 + index * 10}">unsafe-${index}</text></a>`).join("");
+        const {plugin, lightbox, clone} = await openLightboxFromSvg(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120">
+            <circle cx="190" cy="110" r="5" />
+            <a id="safe" href="Folder%2FTarget%23Heading"><text x="10" y="10">safe</text></a>
+            ${links}
+        </svg>`);
+        const anchors = Array.from(clone.querySelectorAll("a"));
+
+        maliciousTargets.forEach((_href, index) => {
+            const anchor = anchors[index + 1];
+            expect(anchor.hasAttribute("href")).toBe(false);
+            click(anchor.querySelector("text") as SVGTextElement);
+        });
+        expect(plugin.app.workspace.openLinkText).not.toHaveBeenCalled();
+
+        const safe = click(anchors[0].querySelector("text") as SVGTextElement);
+        expect(safe.defaultPrevented).toBe(true);
+        expect(plugin.app.workspace.openLinkText).toHaveBeenCalledWith("Folder/Target#Heading", SOURCE_PATH, false);
+        expect(lightbox.isConnected).toBe(true);
+    });
+
+    it("scopes select-all and copied text to the Lightbox SVG and removes the handlers on close", async () => {
+        const outside = document.body.createEl("input");
+        outside.value = "Outside";
+        outside.focus();
+        outside.setSelectionRange(1, 4);
+        const focus = vi.spyOn(SVGElement.prototype, "focus");
+        const {lightbox, clone} = await openLightbox();
+        const selection = window.getSelection();
+        const focusedOnInstall = document.activeElement;
+
+        outside.focus();
+        outside.setSelectionRange(1, 4);
+        const outsideSelectAll = new KeyboardEvent("keydown", {key: "a", ctrlKey: true, bubbles: true, cancelable: true});
+        outside.dispatchEvent(outsideSelectAll);
+        expect(outsideSelectAll.defaultPrevented).toBe(false);
+        expect(outside.selectionStart).toBe(1);
+        expect(outside.selectionEnd).toBe(4);
+
+        expect(clone.getAttribute("tabindex")).toBe("0");
+        expect(focus).toHaveBeenCalledWith({preventScroll: true});
+        expect(focusedOnInstall).toBe(clone);
+        for (const modifier of [{ctrlKey: true}, {metaKey: true}]) {
+            selection?.removeAllRanges();
+            clone.focus();
+            const selectAll = new KeyboardEvent("keydown", {
+                key: "a",
+                ...modifier,
+                bubbles: true,
+                cancelable: true,
+            });
+            clone.dispatchEvent(selectAll);
+
+            expect(selectAll.defaultPrevented).toBe(true);
+            expect(selection?.rangeCount).toBe(1);
+            expect(clone.contains(selection?.anchorNode ?? null) || selection?.anchorNode === clone).toBe(true);
+            expect(clone.contains(selection?.focusNode ?? null) || selection?.focusNode === clone).toBe(true);
+        }
+
+        const setData = vi.fn();
+        const copy = new Event("copy", {bubbles: true, cancelable: true}) as ClipboardEvent;
+        Object.defineProperty(copy, "clipboardData", {value: {setData}});
+        window.dispatchEvent(copy);
+        expect(copy.defaultPrevented).toBe(true);
+        expect(setData).toHaveBeenCalledWith("text/plain", "Open target\nAlice\nExternal");
+
+        const outsideText = document.body.createEl("p", {text: "Outside"});
+        const outsideRange = document.createRange();
+        outsideRange.selectNodeContents(outsideText);
+        selection?.removeAllRanges();
+        selection?.addRange(outsideRange);
+        const outsideCopy = new Event("copy", {bubbles: true, cancelable: true}) as ClipboardEvent;
+        const outsideSetData = vi.fn();
+        Object.defineProperty(outsideCopy, "clipboardData", {value: {setData: outsideSetData}});
+        window.dispatchEvent(outsideCopy);
+        expect(outsideCopy.defaultPrevented).toBe(false);
+        expect(outsideSetData).not.toHaveBeenCalled();
+
+        const nativeImage = lightbox.querySelector<HTMLImageElement>(".media-wrapper > img") as HTMLImageElement;
+        click(lightbox.querySelector(".modal-close-button") as HTMLButtonElement);
+        await Promise.resolve();
+        expect(clone.isConnected).toBe(false);
+
+        const selectionBeforeDetachedKeydown = {
+            anchorNode: selection?.anchorNode,
+            anchorOffset: selection?.anchorOffset,
+            focusNode: selection?.focusNode,
+            focusOffset: selection?.focusOffset,
+            rangeCount: selection?.rangeCount,
+            text: selection?.toString(),
+        };
+        const detachedSelectAll = new KeyboardEvent("keydown", {key: "a", ctrlKey: true, bubbles: true, cancelable: true});
+        clone.dispatchEvent(detachedSelectAll);
+        expect(detachedSelectAll.defaultPrevented).toBe(false);
+        expect({
+            anchorNode: selection?.anchorNode,
+            anchorOffset: selection?.anchorOffset,
+            focusNode: selection?.focusNode,
+            focusOffset: selection?.focusOffset,
+            rangeCount: selection?.rangeCount,
+            text: selection?.toString(),
+        }).toEqual(selectionBeforeDetachedKeydown);
+
+        const afterClose = new KeyboardEvent("keydown", {key: "a", ctrlKey: true, bubbles: true, cancelable: true});
+        window.dispatchEvent(afterClose);
+        expect(afterClose.defaultPrevented).toBe(false);
+
+        const transformAfterClose = clone.style.transform;
+        nativeImage.style.transform = "translate(50px, 25px) scale(4)";
+        await Promise.resolve();
+        expect(clone.style.transform).toBe(transformAfterClose);
+        expect(ResizeObserverStub.instances.every(observer => observer.targets.length === 0)).toBe(true);
+    });
+
+    it.each(["pointerdown", "mousedown"])("snapshots the selection on right-button %s for one context menu", async (downEvent) => {
+        const writeText = vi.fn(async (_text: string) => undefined);
+        Object.defineProperty(navigator, "clipboard", {value: {writeText}, configurable: true});
+        const {lightbox, clone} = await openLightbox();
+        const nativeImage = lightbox.querySelector<HTMLImageElement>(".media-wrapper > img") as HTMLImageElement;
+        const alice = Array.from(clone.querySelectorAll("text")).find(text => text.textContent === "Alice") as SVGTextElement;
+        selectText(alice, 1, 4);
+
+        nativeImage.dispatchEvent(new MouseEvent(downEvent, {bubbles: true, cancelable: true, button: 2}));
+        window.getSelection()?.removeAllRanges();
+        nativeImage.dispatchEvent(new MouseEvent("contextmenu", {bubbles: true, cancelable: true, button: 2}));
+
+        const firstMenu = Menu.lastShown as Menu;
+        expect(firstMenu.getItem("Copy selected text")).toBeDefined();
+        expect(firstMenu.getItem("Copy all diagram text")).toBeDefined();
+        await firstMenu.getItem("Copy selected text")?.callback();
+        expect(writeText).toHaveBeenCalledWith("lic");
+        expect(Notice.messages).toContain("Copied selected diagram text");
+
+        nativeImage.dispatchEvent(new MouseEvent("contextmenu", {bubbles: true, cancelable: true, button: 2}));
+        const secondMenu = Menu.lastShown as Menu;
+        expect(secondMenu).not.toBe(firstMenu);
+        expect(firstMenu.closed).toBe(true);
+
+        click(lightbox.querySelector(".modal-close-button") as HTMLButtonElement);
+        await Promise.resolve();
+        expect(secondMenu.closed).toBe(true);
+    });
+
+    it("reports clipboard rejection from context-menu actions", async () => {
+        const writeText = vi.fn(async (_text: string) => { throw new Error("denied"); });
+        Object.defineProperty(navigator, "clipboard", {value: {writeText}, configurable: true});
+        const {lightbox} = await openLightbox();
+        const nativeImage = lightbox.querySelector<HTMLImageElement>(".media-wrapper > img") as HTMLImageElement;
+
+        nativeImage.dispatchEvent(new MouseEvent("contextmenu", {bubbles: true, cancelable: true, button: 2}));
+        const menu = Menu.lastShown as Menu;
+        await menu.getItem("Copy all diagram text")?.callback();
+
+        expect(writeText).toHaveBeenCalledWith("Open target\nAlice\nExternal");
+        expect(Notice.messages).toContain("Failed to copy diagram text");
+    });
+
+    it("lets the native image own click, zoom, and pan transforms while the clone follows", async () => {
+        const {plugin, lightbox, clone} = await openLightbox();
+        const nativeImage = lightbox.querySelector<HTMLImageElement>(".media-wrapper > img") as HTMLImageElement;
+
+        click(nativeImage);
+        expect(lightbox.isConnected).toBe(true);
+        expect(nativeZoom).not.toHaveBeenCalled();
+
+        nativeImage.dispatchEvent(new MouseEvent("dblclick", {bubbles: true, cancelable: true, button: 0}));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(nativeZoom).toHaveBeenCalledOnce();
+        expect(clone.style.transform).toContain("scale(2)");
+
+        nativeImage.style.transform = "translate(25px, 15px) scale(2)";
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(clone.style.transform).toBe(nativeImage.style.transform);
+
+        nativeImage.dispatchEvent(new WheelEvent("wheel", {bubbles: true, cancelable: true, ctrlKey: true, deltaY: -10}));
+        await new Promise(resolve => setTimeout(resolve, 0));
+        expect(nativeZoom).toHaveBeenCalledTimes(2);
+        expect(nativeImage.style.transform).toBe("translate(25px, 15px) scale(3)");
+        expect(clone.style.transform).toBe(nativeImage.style.transform);
+
+        const alice = Array.from(clone.querySelectorAll("text")).find(text => text.textContent === "Alice") as SVGTextElement;
+        click(alice);
+        expect(lightbox.isConnected).toBe(true);
+
+        const internal = click(Array.from(clone.querySelectorAll("text")).find(text => text.textContent === "Open target") as SVGTextElement);
+        expect(internal.defaultPrevented).toBe(true);
+        expect(plugin.app.workspace.openLinkText).toHaveBeenCalledWith("Target#Heading", SOURCE_PATH, false);
+
+        const external = click(Array.from(clone.querySelectorAll("text")).find(text => text.textContent === "External") as SVGTextElement);
+        expect(external.defaultPrevented).toBe(false);
+        expect(plugin.app.workspace.openLinkText).toHaveBeenCalledTimes(1);
+
+        click(lightbox.querySelector(".lightbox-media") as HTMLElement);
+        expect(lightbox.isConnected).toBe(false);
+    });
+
+    it("routes middle-clicked Lightbox links through the current workspace", async () => {
+        const {plugin, clone} = await openLightbox();
+        vi.mocked(Keymap.isModEvent).mockReturnValueOnce("tab");
+        const target = Array.from(clone.querySelectorAll("text")).find(text => text.textContent === "Open target") as SVGTextElement;
+        const down = new MouseEvent("pointerdown", {bubbles: true, cancelable: true, button: 1});
+        Object.defineProperty(down, "pointerId", {value: 1});
+        const event = new MouseEvent("auxclick", {bubbles: true, cancelable: true, button: 1});
+
+        target.dispatchEvent(down);
+        target.dispatchEvent(event);
+
+        expect(event.defaultPrevented).toBe(true);
+        expect(plugin.app.workspace.openLinkText).toHaveBeenCalledWith("Target#Heading", SOURCE_PATH, "tab");
+    });
+
+    it("uses each owner document's Element constructor and avoids duplicate registration", async () => {
+        const iframe = document.createElement("iframe");
+        document.body.appendChild(iframe);
+        const ownerDocument = iframe.contentDocument as Document;
+        const ownerWindow = iframe.contentWindow as Window & typeof globalThis;
+        const callbacks: FrameRequestCallback[] = [];
+        ownerWindow.requestAnimationFrame = vi.fn(callback => {
+            callbacks.push(callback);
+            return callbacks.length;
+        });
+        const plugin = createPlugin({files: ["Diagrams/Target.md"], settings: {debounce: 0}});
+
+        const readingContainer = ownerDocument.createElement("div");
+        readingContainer.innerHTML = '<a href="Target#Heading"><span>Target</span></a>';
+        ownerDocument.body.appendChild(readingContainer);
+        const processors = new DebouncedProcessors(plugin);
+        processors.renderStates.set(readingContainer, {originalSource: "", source: "", ctx: {sourcePath: SOURCE_PATH}});
+        processors.registerLinkHandlers(readingContainer);
+        readingContainer.querySelector("span")?.dispatchEvent(new ownerWindow.MouseEvent("click", {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+        }));
+        expect(plugin.app.workspace.openLinkText).toHaveBeenCalledWith("Target#Heading", SOURCE_PATH, false);
+
+        const sourceView = ownerDocument.createElement("div");
+        sourceView.className = "markdown-source-view mod-cm6";
+        ownerDocument.body.appendChild(sourceView);
+        const lightboxContainer = ownerDocument.createElement("div");
+        lightboxContainer.innerHTML = SVG;
+        sourceView.appendChild(lightboxContainer);
+        registerSvgLightbox(lightboxContainer, plugin, SOURCE_PATH);
+        registerSvgLightbox(lightboxContainer, plugin, SOURCE_PATH);
+        const svg = lightboxContainer.querySelector("svg") as SVGSVGElement;
+
+        svg.querySelector("a text")?.dispatchEvent(new ownerWindow.MouseEvent("click", {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+        }));
+        expect(lightboxContainer.querySelector("[data-plantuml-lightbox-trigger]")).toBeNull();
+
+        svg.querySelector("circle")?.dispatchEvent(new ownerWindow.MouseEvent("click", {
+            bubbles: true,
+            cancelable: true,
+            button: 0,
+        }));
+        expect(callbacks).toHaveLength(0);
+        expect(ownerDocument.querySelector("[data-plantuml-lightbox-fallback]")).not.toBeNull();
+        expect(document.querySelector("[data-plantuml-lightbox-fallback]")).toBeNull();
+        expect(lightboxContainer.querySelector("[data-plantuml-lightbox-trigger]")).toBeNull();
+    });
+
+    it("shrinks wide note SVGs without enlarging small ones and styles only the Lightbox clone for selection", () => {
+        const css = readFileSync(resolve(__dirname, "../styles.css"), "utf8").replace(/\s+/g, " ");
+        const noteSvgRule = css.match(/\.puml-svg \{([^}]*)\}/)?.[1] ?? "";
+
+        expect(noteSvgRule).toContain("max-width: 100%;");
+        expect(noteSvgRule).toContain("height: auto !important;");
+        expect(noteSvgRule).not.toMatch(/(?:^|;)\s*width:\s*100%;/);
+        expect(css).toMatch(/\.plantuml-svg-lightbox-trigger \{[^}]*position: fixed;/);
+        expect(css).toMatch(/\.plantuml-svg-lightbox-inline \{[^}]*position: absolute;/);
+        expect(css).toMatch(/\.plantuml-svg-lightbox-native \{[^}]*opacity: 0;/);
+        expect(css).toMatch(/\.plantuml-svg-lightbox-inline \{[^}]*pointer-events: none;/);
+        expect(css).toMatch(/\.plantuml-svg-lightbox-inline :is\(text, tspan, textPath, a, a \*\) \{[^}]*pointer-events: auto;/);
+        expect(css).toMatch(/\.plantuml-svg-lightbox-inline :is\(text, tspan, textPath\) \{[^}]*user-select: text;/);
+        expect(css).not.toContain("is-plantuml-panning");
+        expect(css).not.toMatch(/\.puml-svg \{[^}]*user-select: none;/);
+    });
+});

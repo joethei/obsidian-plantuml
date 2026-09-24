@@ -107,6 +107,7 @@ describe("default processor settings", () => {
             expect(svg).toHaveBeenCalledTimes(1);
             expect(el.dataset.filetype).toBe("svg");
             expect(el.querySelector(":scope > svg")).not.toBeNull();
+            expect(el.querySelector<SVGSVGElement>(":scope > svg")?.dataset.plantumlLightboxRegistered).toBe("true");
 
             el.dispatchEvent(new MouseEvent("contextmenu"));
             await (Menu.lastShown as Menu).getItem("Copy diagram").callback();
