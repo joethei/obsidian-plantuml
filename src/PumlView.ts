@@ -3,7 +3,6 @@ import PlantumlPlugin from "./main";
 import {
     drawSelection,
     EditorView,
-    highlightActiveLine,
     highlightActiveLineGutter,
     keymap,
     lineNumbers
@@ -51,7 +50,6 @@ export class PumlView extends TextFileView {
     previewDiv: HTMLElement | null = null;
 
     extensions: Extension[] = [
-        highlightActiveLine(),
         highlightActiveLineGutter(),
         highlightSelectionMatches(),
         drawSelection(),

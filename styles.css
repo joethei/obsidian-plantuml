@@ -5,20 +5,17 @@
     width: 100%;
 }
 
-.plantuml-source-view .cm-activeLine {
-    background-color: unset !important;
+.view-content .plantuml-source-view .cm-gutters {
+    background-color: unset;
 }
 
-.plantuml-source-view .cm-gutters {
-    background-color: unset !important;
-}
-
-.plantuml-source-view .cm-cursor {
+.view-content .plantuml-source-view .cm-cursor {
     border-left: 1.2px solid var(--text-muted);
 }
 
-.plantuml-source-view .cm-selectionBackground {
-    background-color: var(--text-selection) !important;
+/* more specific than the focused selection rule of the CodeMirror base theme */
+.view-content .plantuml-source-view .cm-editor .cm-scroller .cm-selectionLayer .cm-selectionBackground {
+    background-color: var(--text-selection);
 }
 
 .puml-loading {
@@ -39,7 +36,7 @@
 
 .puml-svg {
     max-width: 100%;
-    height: auto !important;
+    height: auto;
 }
 
 .plantuml-svg-lightbox-trigger {
