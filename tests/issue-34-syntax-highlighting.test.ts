@@ -1,6 +1,5 @@
 import {afterEach, describe, expect, it, vi} from "vitest";
-import {EditorState} from "@codemirror/state";
-import {ensureSyntaxTree, StreamLanguage, StringStream, tokenClassNodeProp} from "@codemirror/language";
+import {StringStream} from "@codemirror/language";
 import {CodeMirrorModes, plantumlMode, PlantUMLState, registerCodeBlockHighlighting} from "../src/syntaxHighlighting";
 import {loadPlugin} from "./helpers";
 
@@ -16,21 +15,10 @@ vi.mock("localforage", () => {
     return {...localforage, default: localforage};
 });
 
-/** the highlighted tokens as the `.puml` editor sees them, text without a token is left out */
-function tokens(source: string): [string, string][] {
-    const state = EditorState.create({doc: source, extensions: StreamLanguage.define(plantumlMode())});
-    const tree = ensureSyntaxTree(state, state.doc.length, 5000);
-    const result: [string, string][] = [];
-    tree.iterate({
-        enter: node => {
-            const token = node.type.prop(tokenClassNodeProp);
-            if (token) result.push([state.sliceDoc(node.from, node.to), token]);
-        },
-    });
-    return result;
-}
-
-/** the highlighted tokens as a fenced code block in a note sees them, line by line behind a hidden prefix like `> ` */
+/**
+ * the highlighted tokens, fed line by line as CodeMirror feeds a stream parser, optionally behind a hidden prefix
+ * like the `> ` of a callout. Text without a token is left out.
+ */
 function codeBlockTokens(mode: ReturnType<typeof plantumlMode>, lines: string[], prefix = ""): [string, string][] {
     const state = mode.startState(2) as PlantUMLState;
     const result: [string, string][] = [];
@@ -41,12 +29,17 @@ function codeBlockTokens(mode: ReturnType<typeof plantumlMode>, lines: string[],
             while (!stream.eol()) {
                 stream.start = stream.pos;
                 const token = mode.token(stream, state);
+                if (stream.pos === stream.start) throw new Error(`no progress at ${stream.pos} in "${line}"`);
                 if (token) result.push([stream.current(), token]);
             }
             return null;
         });
     }
     return result;
+}
+
+function tokens(source: string): [string, string][] {
+    return codeBlockTokens(plantumlMode(), source.split("\n"));
 }
 
 function fakeCodeMirror(modes: Record<string, unknown> = {}): CodeMirrorModes {
