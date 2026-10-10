@@ -30,7 +30,6 @@
     "eslint": "9.39.4",
     "eslint-plugin-obsidianmd": "^0.2.9",
     "jsdom": "^26.1.0",
-    "localforage": "1.10.0",
     "obsidian": "1.13.1",
     "plantuml-encoder": "^1.4.0",
     "tslib": "^2.3.1",
