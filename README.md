@@ -27,6 +27,13 @@ You can also use `plantuml-ascii` to generate ASCII Art.
 
 Documentation on Plantuml can be found on [plantuml.com](https://plantuml.com/)
 
+### Syntax highlighting
+
+The PlantUML source is highlighted while you edit it: in the code blocks of a note
+(Source mode, and Live Preview while the cursor is in the block) and in the editor of `.puml` / `.pu` files.
+The colours are the code colours of your theme.
+Notes that are already open when the plugin gets enabled may need to be reopened.
+
 ### Linking to notes in vault
 
 Since the syntax for weblinks in PlantUML is the same for as for Wikilinks in Obsidian,

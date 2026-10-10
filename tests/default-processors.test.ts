@@ -5,7 +5,7 @@ import {PumlView} from "../src/PumlView";
 import {PumlEmbed} from "../src/embed";
 import {DebouncedProcessors} from "../src/processors/debouncedProcessors";
 import {DEFAULT_SETTINGS, PlantUMLSettingsTab} from "../src/settings";
-import {createPlugin} from "./helpers";
+import {createPlugin, loadPlugin} from "./helpers";
 
 vi.mock("localforage", () => {
     const localforage = {
@@ -119,21 +119,10 @@ describe("default processor settings", () => {
     });
 
     it("registers generic code blocks through codeBlock and leaves explicit processors fixed", async () => {
-        const fakePlugin = createPlugin();
-        const app = fakePlugin.app as typeof fakePlugin.app & {
-            embedRegistry: {registerExtensions: ReturnType<typeof vi.fn>; unregisterExtensions: ReturnType<typeof vi.fn>};
-        };
-        app.embedRegistry = {registerExtensions: vi.fn(), unregisterExtensions: vi.fn()};
-        app.vault.on = vi.fn(() => ({}));
-
-        const plugin = new PlantumlPlugin(app, {});
-        const register = vi.spyOn(plugin, "registerMarkdownCodeBlockProcessor");
-
-        plugin.onload();
-        await vi.waitFor(() => expect(register).toHaveBeenCalledTimes(9));
+        const {plugin, registerProcessor} = await loadPlugin();
 
         try {
-            const registrations = new Map(register.mock.calls);
+            const registrations = new Map(registerProcessor.mock.calls);
             expect(plugin.debouncedProcessor.codeBlock).toEqual(expect.any(Function));
             expect(registrations.get("plantuml")).toBe(plugin.debouncedProcessor.codeBlock);
             expect(registrations.get("puml")).toBe(plugin.debouncedProcessor.codeBlock);

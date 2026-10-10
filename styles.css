@@ -21,6 +21,42 @@
     background-color: var(--text-selection) !important;
 }
 
+.plantuml-source-view .cm-comment {
+    color: var(--code-comment);
+}
+
+.plantuml-source-view .cm-keyword {
+    color: var(--code-keyword);
+}
+
+.plantuml-source-view :is(.cm-string, .cm-link) {
+    color: var(--code-string);
+}
+
+.plantuml-source-view :is(.cm-number, .cm-atom) {
+    color: var(--code-value);
+}
+
+.plantuml-source-view .cm-operator {
+    color: var(--code-operator);
+}
+
+.plantuml-source-view :is(.cm-def, .cm-builtin) {
+    color: var(--code-function);
+}
+
+.plantuml-source-view :is(.cm-property, .cm-attribute, .cm-variable-2) {
+    color: var(--code-property);
+}
+
+.plantuml-source-view .cm-tag {
+    color: var(--code-tag);
+}
+
+.plantuml-source-view .cm-meta {
+    color: var(--code-important);
+}
+
 .puml-loading {
     color: var(--text-accent);
 }

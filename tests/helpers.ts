@@ -1,6 +1,6 @@
-import {vi} from "vitest";
+import {expect, vi} from "vitest";
 import {FileSystemAdapter, TFile} from "obsidian";
-import type PlantumlPlugin from "../src/main";
+import PlantumlPlugin from "../src/main";
 import {DEFAULT_SETTINGS, PlantUMLSettings} from "../src/settings";
 import {Replacer} from "../src/functions";
 import type {Processor} from "../src/processors/processor";
@@ -93,6 +93,28 @@ export function createPlugin(options: FakePluginOptions = {}): FakePlugin {
     } as unknown as FakePlugin;
     plugin.replacer = new Replacer(plugin);
     return plugin;
+}
+
+/**
+ * runs the real `onload` against a fake app, resolves once the code block processors are registered.
+ * Mock `localforage` in tests that use it.
+ */
+export async function loadPlugin() {
+    const fakePlugin = createPlugin();
+    const app = fakePlugin.app as typeof fakePlugin.app & {
+        embedRegistry: {registerExtensions: ReturnType<typeof vi.fn>; unregisterExtensions: ReturnType<typeof vi.fn>};
+        vault: {on: ReturnType<typeof vi.fn>};
+    };
+    app.embedRegistry = {registerExtensions: vi.fn(), unregisterExtensions: vi.fn()};
+    app.vault.on = vi.fn(() => ({}));
+
+    const plugin = new PlantumlPlugin(app, {});
+    const register = vi.spyOn(plugin, "register");
+    const registerProcessor = vi.spyOn(plugin, "registerMarkdownCodeBlockProcessor");
+
+    plugin.onload();
+    await vi.waitFor(() => expect(registerProcessor).toHaveBeenCalledTimes(9));
+    return {plugin, register, registerProcessor};
 }
 
 /** switch the (fake) Obsidian theme */

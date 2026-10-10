@@ -13,6 +13,7 @@ import {Replacer} from "./functions";
 import {PumlView, VIEW_TYPE} from "./PumlView";
 import localforage from "localforage";
 import {PumlEmbed} from "./embed";
+import {CodeMirrorModes, registerCodeBlockHighlighting} from "./syntaxHighlighting";
 
 declare module "obsidian" {
     interface Workspace {
@@ -38,6 +39,20 @@ declare module "obsidian" {
         containerEl: HTMLElement;
     }
 }
+
+/** the fenced code block languages and the processor that renders them */
+const CODE_BLOCKS: Record<string, "codeBlock" | "png" | "ascii" | "svg"> = {
+    "plantuml": "codeBlock",
+    "plantuml-png": "png",
+    "plantuml-ascii": "ascii",
+    "plantuml-svg": "svg",
+    "puml": "codeBlock",
+    "puml-png": "png",
+    "puml-svg": "svg",
+    "puml-ascii": "ascii",
+    //keep this processor for backwards compatibility
+    "plantuml-map": "png",
+};
 
 export default class PlantumlPlugin extends Plugin {
     settings: PlantUMLSettings;
@@ -69,6 +84,10 @@ export default class PlantumlPlugin extends Plugin {
     }
 
     onload(): void {
+        // before the settings are loaded, so notes that are open on startup get highlighted
+        const codeMirror = (window as unknown as {CodeMirror?: CodeMirrorModes}).CodeMirror;
+        this.register(registerCodeBlockHighlighting(codeMirror, Object.keys(CODE_BLOCKS)));
+
         void this.loadSettings().then(async () => {
             this.addSettingTab(new PlantUMLSettingsTab(this));
             this.replacer = new Replacer(this);
@@ -88,17 +107,9 @@ export default class PlantumlPlugin extends Plugin {
             });
             this.registerExtensions(["puml", "pu"], VIEW_TYPE);
 
-            this.registerMarkdownCodeBlockProcessor("plantuml", processor.codeBlock);
-            this.registerMarkdownCodeBlockProcessor("plantuml-png", processor.png);
-            this.registerMarkdownCodeBlockProcessor("plantuml-ascii", processor.ascii);
-            this.registerMarkdownCodeBlockProcessor("plantuml-svg", processor.svg);
-            this.registerMarkdownCodeBlockProcessor("puml", processor.codeBlock);
-            this.registerMarkdownCodeBlockProcessor("puml-png", processor.png);
-            this.registerMarkdownCodeBlockProcessor("puml-svg", processor.svg);
-            this.registerMarkdownCodeBlockProcessor("puml-ascii", processor.ascii);
-
-            //keep this processor for backwards compatibility
-            this.registerMarkdownCodeBlockProcessor("plantuml-map", processor.png);
+            for (const [language, method] of Object.entries(CODE_BLOCKS)) {
+                this.registerMarkdownCodeBlockProcessor(language, processor[method]);
+            }
 
             this.app.embedRegistry.registerExtensions(['puml', 'pu'], (ctx, file, _subpath) => new PumlEmbed(this, file, ctx));
 
