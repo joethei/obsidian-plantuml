@@ -209,6 +209,109 @@ export function serializeSvg(svg: SVGElement): string {
     return new XMLSerializer().serializeToString(svg);
 }
 
+const CAPTION = /^\s*caption(?:\s*:\s*|\s+)(.*?)\s*$/i;
+// creole and HTML markup, links, escapes and preprocessor variables or calls, only PlantUML renders those
+const NOT_PLAIN = /\*\*|\/\/|""|__|--|~~|<\/?[a-z]|\[\[|\$\w|%\w+\(|\\[^n]/i;
+// the lines of multi-line notes, legends, titles, headers and footers are text, not commands
+const TEXT_START = /^\s*(?:[rh]?note\b(?!.*[:"])|legend\b|ref\s+over\b(?!.*:)|(?:(?:left|right|center)\s+)?(?:title|header|footer)\s*$)/i;
+const TEXT_END = /^\s*end\s*[rh]?(?:note|legend|ref|title|header|footer)\b/i;
+// whether a caption in there is used depends on the preprocessor
+const PREPROCESSOR_START = /^\s*!(?:if|ifdef|ifndef|ifexist|procedure|function|unquoted|definelong|while|foreach)\b(?!.*!return)/i;
+const PREPROCESSOR_END = /^\s*!(?:endif|end\s*procedure|end\s*function|enddefinelong|endwhile|endfor(?:each)?)\b/i;
+// diagrams whose lines are data, like a `caption:` key in YAML
+const DATA_DIAGRAM = /^\s*@start(?:yaml|json|ditaa|math|latex)\b/i;
+
+/**
+ * take the `caption` out of the diagram source, so it can be shown below the diagram instead of inside the image.
+ * only plain text captions on the top level of the first page are taken, not those in blocks, comments,
+ * notes or preprocessor branches, and not those with markup only PlantUML renders.
+ * all of them are removed, as PlantUML shows the last one, unless that one is left to PlantUML.
+ * @return the source without the caption lines and the caption, `\n` in it is turned into a line break
+ */
+export function extractCaption(source: string): {source: string, caption: string | null} {
+    const lines = source.split("\n");
+    const captions: {index: number, text: string}[] = [];
+    let depth = 0;
+    let preprocessor = 0;
+    let block: "comment" | "text" | "style" | null = null;
+
+    for (let index = 0; index < lines.length; index++) {
+        const line = lines[index];
+        if (block === "comment") {
+            if (line.includes("'/")) block = null;
+            continue;
+        }
+        if (block === "text") {
+            if (TEXT_END.test(line)) block = null;
+            continue;
+        }
+        if (block === "style") {
+            if (/<\/style>/i.test(line)) block = null;
+            continue;
+        }
+        if (DATA_DIAGRAM.test(line)) return {source, caption: null};
+        if (/^\s*(?:@end|newpage\b)/i.test(line)) break;
+        if (/^\s*'/.test(line)) continue;
+        if (/^\s*\/'/.test(line)) {
+            if (!line.trim().endsWith("'/")) block = "comment";
+            continue;
+        }
+        if (/^\s*<style>/i.test(line)) {
+            if (!/<\/style>/i.test(line)) block = "style";
+            continue;
+        }
+        if (PREPROCESSOR_START.test(line)) {
+            preprocessor++;
+            continue;
+        }
+        if (PREPROCESSOR_END.test(line)) {
+            preprocessor = Math.max(0, preprocessor - 1);
+            continue;
+        }
+        if (depth === 0 && preprocessor === 0) {
+            const caption = CAPTION.exec(line);
+            if (caption) {
+                captions.push({index, text: caption[1]});
+                continue;
+            }
+            if (TEXT_START.test(line)) {
+                block = "text";
+                continue;
+            }
+        }
+        depth = Math.max(0, depth + (line.split("{").length - 1) - (line.split("}").length - 1));
+    }
+
+    const last = captions[captions.length - 1];
+    if (!last || last.text.length === 0 || NOT_PLAIN.test(last.text)) return {source, caption: null};
+    for (const {index} of captions) lines[index] = "";
+    return {source: lines.join("\n"), caption: last.text.replace(/\\n/g, "\n")};
+}
+
+let captionCount = 0;
+
+/**
+ * show the caption below the diagram, like image captions.
+ * the processors empty the element on every render, so this runs after each render.
+ */
+export function insertCaption(el: HTMLElement, caption: string | null | undefined) {
+    el.querySelector(":scope > .puml-caption")?.remove();
+    if (!caption) {
+        if (el.hasClass("puml-figure")) {
+            el.removeClass("puml-figure");
+            el.removeAttribute("role");
+            el.removeAttribute("aria-labelledby");
+        }
+        return;
+    }
+    // not aria-label, Obsidian shows that as tooltip
+    const id = `puml-caption-${++captionCount}`;
+    el.addClass("puml-figure");
+    el.setAttr("role", "figure");
+    el.setAttr("aria-labelledby", id);
+    el.createDiv({cls: "puml-caption", text: caption, attr: {id}});
+}
+
 export function insertErrorMessage(el: HTMLElement, error: unknown) {
     el.empty();
 
