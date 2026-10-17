@@ -1,7 +1,7 @@
 import { debounce, Debouncer, HoverParent, Keymap, Menu, Notice, TFile } from "obsidian";
 import PlantumlPlugin from "../main";
 import { Processor, ProcessorContext } from "./processor";
-import { getInternalLinkText, insertErrorMessage, serializeSvg } from "../functions";
+import { extractCaption, getInternalLinkText, insertCaption, insertErrorMessage, serializeSvg } from "../functions";
 import { registerSvgLightbox } from "../svgLightbox";
 
 export class DebouncedProcessors implements Processor {
@@ -13,6 +13,7 @@ export class DebouncedProcessors implements Processor {
     renderStates = new WeakMap<HTMLElement, {
         originalSource: string,
         source: string,
+        caption: string | null,
         ctx: ProcessorContext,
         filetype: string,
         processor: (source: string, el: HTMLElement, ctx: ProcessorContext) => Promise<void>,
@@ -52,6 +53,13 @@ export class DebouncedProcessors implements Processor {
         el.createEl("h6", {text: "Generating PlantUML diagram", cls: "puml-loading"});
 
         let source = this.plugin.replacer.decodeWhiteSpaces(originalSource);
+        let caption: string | null = null;
+        if (this.plugin.settings.captionBelowDiagram) {
+            const extracted = extractCaption(source);
+            source = extracted.source;
+            // the display text of an embed replaces the caption of the diagram
+            caption = ctx?.caption || extracted.caption;
+        }
         source = this.plugin.replacer.replaceLinks(source, ctx?.sourcePath ?? '', filetype);
         const themeHeader = activeDocument.body.hasClass('theme-dark')
             ? this.plugin.settings.darkHeader
@@ -59,18 +67,20 @@ export class DebouncedProcessors implements Processor {
         source = this.plugin.replacer.insertHeaders(source, this.plugin.settings.header, themeHeader);
 
         const isRerender = this.renderStates.has(el);
-        const state = {originalSource, source, ctx, filetype, processor};
+        const state = {originalSource, source, caption, ctx, filetype, processor};
         this.renderStates.set(el, state);
 
         const render = async (source: string, el: HTMLElement, ctx: ProcessorContext) => {
+            // the caption has to match the diagram of this render, even if a newer one finished earlier
+            const renderState = this.renderStates.get(el);
             try {
-                const renderState = this.renderStates.get(el);
                 await renderState?.processor(source, el, ctx);
                 if (renderState?.filetype === "svg") registerSvgLightbox(el, this.plugin, ctx.sourcePath);
             } catch (error) {
                 console.error("PlantUML: failed to render diagram", error);
                 insertErrorMessage(el, error);
             }
+            insertCaption(el, renderState?.caption);
         };
 
         if (isRerender) {
