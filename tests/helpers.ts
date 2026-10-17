@@ -6,7 +6,7 @@ import {Replacer} from "../src/functions";
 import type {Processor} from "../src/processors/processor";
 import type {DiagramCacheEntry} from "../src/cache";
 
-/** an in-memory replacement for the localforage backed DiagramCache */
+/** an in-memory replacement for the IndexedDB backed DiagramCache */
 export class MemoryCache {
     entries = new Map<string, DiagramCacheEntry>();
 

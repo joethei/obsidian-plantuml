@@ -7,17 +7,15 @@ import {DebouncedProcessors} from "../src/processors/debouncedProcessors";
 import {DEFAULT_SETTINGS, PlantUMLSettingsTab} from "../src/settings";
 import {createPlugin} from "./helpers";
 
-vi.mock("localforage", () => {
-    const localforage = {
-        clear: vi.fn(async () => undefined),
-        config: vi.fn(),
-        getItem: vi.fn(async () => null),
-        iterate: vi.fn(async () => undefined),
-        removeItem: vi.fn(async () => undefined),
-        setItem: vi.fn(async () => undefined),
-    };
-    return {...localforage, default: localforage};
-});
+vi.mock("../src/idbStore", () => ({
+    IdbStore: class {
+        clear = vi.fn(async () => undefined);
+        getItem = vi.fn(async () => null);
+        iterate = vi.fn(async () => undefined);
+        removeItem = vi.fn(async () => undefined);
+        setItem = vi.fn(async () => undefined);
+    },
+}));
 
 const SOURCE = "@startuml\nA -> B\n@enduml";
 const CONTEXT = {sourcePath: "Diagrams/example.puml"};
