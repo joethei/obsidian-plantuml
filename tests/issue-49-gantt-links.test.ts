@@ -66,9 +66,17 @@ describe("issue #49: links in wide diagrams", () => {
         const svg = el.querySelector("svg");
         expect(svg.classList.contains("puml-svg")).toBe(true);
         expect(svg.querySelector("a")?.getAttribute("href")).toBe("https://google.com");
+        expect(svg.style.height).toBe("");
+        expect(svg.style.width).toBe("2578px");
 
         const css = readFileSync(resolve(__dirname, "../styles.css"), "utf8").replace(/\s+/g, " ");
         expect(css).toMatch(/\.puml-svg \{[^}]*max-width: 100%;/);
-        expect(css).toMatch(/\.puml-svg \{[^}]*height: auto !important;/);
+        expect(css).toMatch(/\.puml-svg \{[^}]*height: auto;/);
+    });
+
+    it("does not fail on a response that is xml but not svg", () => {
+        const el = document.createElement("div");
+
+        expect(() => insertSvgImage(el, "<Error><Message>Not Found</Message></Error>")).not.toThrow();
     });
 });

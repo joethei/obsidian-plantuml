@@ -1,6 +1,7 @@
 import {FileSystemAdapter, parseLinktext, TAbstractFile} from "obsidian";
 import PlantumlPlugin from "./main";
 import {ProcessorContext} from "./processors/processor";
+import {SVG_NAMESPACE} from "./svgSecurity";
 
 interface VaultWithDirectParent { getDirectParent(file: TAbstractFile): { path: string } | null; }
 interface AppWithObsidianUrl { getObsidianUrl(file: unknown): string; }
@@ -198,6 +199,10 @@ export function insertSvgImage(el: HTMLElement, image: string) {
 
     const svgEl = activeDocument.importNode(svg.documentElement, true);
     svgEl.addClass("puml-svg");
+    // PlantUML sets a fixed inline height, which would distort the diagram once max-width shrinks it
+    if (svgEl.namespaceURI === SVG_NAMESPACE) {
+        svgEl.style.removeProperty("height");
+    }
     el.appendChild(svgEl);
 }
 

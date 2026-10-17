@@ -784,7 +784,7 @@ describe("SVG Lightbox", () => {
         const noteSvgRule = css.match(/\.puml-svg \{([^}]*)\}/)?.[1] ?? "";
 
         expect(noteSvgRule).toContain("max-width: 100%;");
-        expect(noteSvgRule).toContain("height: auto !important;");
+        expect(noteSvgRule).toContain("height: auto;");
         expect(noteSvgRule).not.toMatch(/(?:^|;)\s*width:\s*100%;/);
         expect(css).toMatch(/\.plantuml-svg-lightbox-trigger \{[^}]*position: fixed;/);
         expect(css).toMatch(/\.plantuml-svg-lightbox-inline \{[^}]*position: absolute;/);
