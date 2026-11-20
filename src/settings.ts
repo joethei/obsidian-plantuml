@@ -16,6 +16,7 @@ export interface PlantUMLSettings {
     exportPath: string;
     lightHeader: string;
     darkHeader: string;
+    captionBelowDiagram: boolean;
 }
 
 export const DEFAULT_SETTINGS: PlantUMLSettings = {
@@ -31,6 +32,7 @@ export const DEFAULT_SETTINGS: PlantUMLSettings = {
     exportPath: '',
     lightHeader: '',
     darkHeader: '',
+    captionBelowDiagram: false,
 }
 
 export class PlantUMLSettingsTab extends PluginSettingTab {
@@ -120,6 +122,15 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
                         png: 'PNG',
                         svg: 'SVG',
                     }
+                }
+            },
+            {
+                name: 'Captions below diagrams',
+                desc: 'Show the caption of a diagram below it like an image caption, instead of inside the image. Embeds show their display text (![[diagram.puml|caption]]) as caption.',
+                control: {
+                    type: 'toggle',
+                    key: 'captionBelowDiagram',
+                    defaultValue: DEFAULT_SETTINGS.captionBelowDiagram,
                 }
             },
             {
