@@ -11,7 +11,6 @@ import {Processor} from "./processors/processor";
 import {ServerProcessor} from "./processors/serverProcessor";
 import {Replacer} from "./functions";
 import {PumlView, VIEW_TYPE} from "./PumlView";
-import localforage from "localforage";
 import {PumlEmbed} from "./embed";
 
 declare module "obsidian" {
@@ -108,12 +107,13 @@ export default class PlantumlPlugin extends Plugin {
                 callback: () => void this.cache.clear(true),
             });
 
-            localforage.config({
-                name: 'puml',
-                description: 'PlantUML plugin'
-            });
-            await this.cache.migrateFromV1();
-            await this.cache.evictExpired(this.settings.cache);
+            try {
+                await this.cache.migrateFromV1();
+                await this.cache.evictExpired(this.settings.cache);
+            } catch (error) {
+                // the rest of the plugin works without the cache
+                console.warn('PlantUML: diagram cache unavailable', error);
+            }
 
             //internal links
             this.observer = new MutationObserver((mutations) => {
