@@ -1,9 +1,8 @@
-import {debounce, Debouncer, Keymap, MarkdownPostProcessorContext, setIcon, TextFileView, ViewStateResult, WorkspaceLeaf} from "obsidian";
+import {Keymap, setIcon, TextFileView, ViewStateResult, WorkspaceLeaf} from "obsidian";
 import PlantumlPlugin from "./main";
 import {
     drawSelection,
     EditorView,
-    highlightActiveLine,
     highlightActiveLineGutter,
     keymap,
     lineNumbers
@@ -48,10 +47,9 @@ export class PumlView extends TextFileView {
     currentView: 'source' | 'preview';
     plugin: PlantumlPlugin;
     dispatchId = -1;
-    debounced: Debouncer<[string, HTMLElement, MarkdownPostProcessorContext | null], void>;
+    previewDiv: HTMLElement | null = null;
 
     extensions: Extension[] = [
-        highlightActiveLine(),
         highlightActiveLineGutter(),
         highlightSelectionMatches(),
         drawSelection(),
@@ -69,8 +67,6 @@ export class PumlView extends TextFileView {
     constructor(leaf: WorkspaceLeaf, plugin: PlantumlPlugin) {
         super(leaf);
         this.plugin = plugin;
-
-        this.debounced = debounce(this.plugin.getProcessor().png, this.plugin.settings.debounce * 1000, true);
 
         this.sourceEl = this.contentEl.createDiv({cls: 'plantuml-source-view', attr: {'style': 'display: block'}});
         this.previewEl = this.contentEl.createDiv({cls: 'plantuml-preview-view', attr: {'style': 'display: none'}});
@@ -205,6 +201,7 @@ export class PumlView extends TextFileView {
     // clear the editor, etc
     clear() {
         this.previewEl.empty();
+        this.previewDiv = null;
         this.data = null;
     }
 
@@ -223,13 +220,10 @@ export class PumlView extends TextFileView {
 
 
     async renderPreview() {
-        if(this.currentView !== "preview") return;
-        this.previewEl.empty();
-        const loadingHeader = this.previewEl.createEl("h1", {text: "Loading"});
-        const previewDiv = this.previewEl.createDiv();
+        if(this.currentView !== "preview" || !this.file) return;
+        // reuse the element, so that re-rendering is debounced
+        this.previewDiv ??= this.previewEl.createDiv();
 
-
-        this.debounced(this.getViewData(), previewDiv, null);
-        loadingHeader.remove();
+        await this.plugin.debouncedProcessor.default(this.getViewData(), this.previewDiv, {sourcePath: this.file.path});
     }
 }

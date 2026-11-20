@@ -1,6 +1,8 @@
 import { Platform, PluginSettingTab, SettingDefinitionItem } from "obsidian";
 import PlantumlPlugin from "./main";
 
+export type ImageFormat = "png" | "svg";
+
 export interface PlantUMLSettings {
     server_url: string,
     docker_server: boolean;
@@ -9,11 +11,13 @@ export interface PlantUMLSettings {
     localJar: string;
     javaPath: string;
     dotPath: string;
-    defaultProcessor: string;
+    defaultProcessor: ImageFormat;
+    codeBlockProcessor: ImageFormat;
     cache: number;
     exportPath: string;
     lightHeader: string;
     darkHeader: string;
+    captionBelowDiagram: boolean;
 }
 
 export const DEFAULT_SETTINGS: PlantUMLSettings = {
@@ -25,10 +29,12 @@ export const DEFAULT_SETTINGS: PlantUMLSettings = {
     javaPath: 'java',
     dotPath: '',
     defaultProcessor: "png",
+    codeBlockProcessor: "png",
     cache: 60,
     exportPath: '',
     lightHeader: '',
     darkHeader: '',
+    captionBelowDiagram: false,
 }
 
 export class PlantUMLSettingsTab extends PluginSettingTab {
@@ -120,6 +126,28 @@ export class PlantUMLSettingsTab extends PluginSettingTab {
                         png: 'PNG',
                         svg: 'SVG',
                     }
+                }
+            },
+            {
+                name: 'Default processor for code blocks',
+                desc: 'PlantUML and puml code blocks will use this processor.',
+                control: {
+                    type: 'dropdown',
+                    key: 'codeBlockProcessor',
+                    defaultValue: DEFAULT_SETTINGS.codeBlockProcessor,
+                    options: {
+                        png: 'PNG',
+                        svg: 'SVG',
+                    }
+                }
+            },
+            {
+                name: 'Captions below diagrams',
+                desc: 'Show the caption of a diagram below it like an image caption, instead of inside the image. Embeds show their display text (![[diagram.puml|caption]]) as caption.',
+                control: {
+                    type: 'toggle',
+                    key: 'captionBelowDiagram',
+                    defaultValue: DEFAULT_SETTINGS.captionBelowDiagram,
                 }
             },
             {

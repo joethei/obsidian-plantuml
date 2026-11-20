@@ -2,7 +2,7 @@ import {MarkdownPostProcessorContext, request, requestUrl} from "obsidian";
 import {DEFAULT_SETTINGS} from "../settings";
 import * as plantuml from "plantuml-encoder";
 import PlantumlPlugin from "../main";
-import {Processor} from "./processor";
+import {Processor, ProcessorContext} from "./processor";
 import {insertAsciiImage, insertImageWithMap, insertSvgImage} from "../functions";
 
 export class ServerProcessor implements Processor {
@@ -45,7 +45,7 @@ export class ServerProcessor implements Processor {
         });
     };
 
-    png = async(source: string, el: HTMLElement, _: MarkdownPostProcessorContext) => {
+    png = async(source: string, el: HTMLElement, _: ProcessorContext) => {
         const url = this.getUrl();
         //Docker deploys do not serve the dark mode endpoints
         const endpoint = this.isDark()&&!this.isDockerServer()?"/dpng/":"/png/"
@@ -67,22 +67,33 @@ export class ServerProcessor implements Processor {
 
         //get image map data to support clicking links in diagrams
         const mapUrlBase = url + "/map/";
-        const map = await request({url: mapUrlBase + encodedDiagram, method: "GET"});
+        let map: string;
+        try {
+            map = await request({url: mapUrlBase + encodedDiagram, method: "GET"});
+        } catch (error) {
+            console.error(error);
+            this.insertError(el, "Could not reach the PlantUML server");
+            return;
+        }
 
         insertImageWithMap(el, image, map, encodedDiagram);
     }
 
-    ascii = async(source: string, el: HTMLElement, _: MarkdownPostProcessorContext) => {
+    ascii = async(source: string, el: HTMLElement, _: ProcessorContext) => {
         const asciiUrlBase = this.getUrl() + (this.isDark() ? "/dtxt/" : "/txt/");
         const encodedDiagram = plantuml.encode(source);
 
-        const result = await request({url: asciiUrlBase + encodedDiagram});
+        let result: string;
+        try {
+            result = await this.getText(asciiUrlBase + encodedDiagram);
+        } catch (error) {
+            console.error(error);
+            this.insertError(el, "Could not reach the PlantUML server");
+            return;
+        }
 
         if (result.startsWith("�PNG")) {
-            const text = activeDocument.createEl("p");
-            text.addClass('mod-error')
-            text.innerText = "Your configured PlantUML Server does not support ASCII Art";
-            el.appendChild(text);
+            this.insertError(el, "Your configured PlantUML Server does not support ASCII Art");
             return;
         }
 

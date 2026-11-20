@@ -1,6 +1,6 @@
 import PlantumlPlugin from "../main";
-import {Processor} from "./processor";
-import {MarkdownPostProcessorContext, Platform} from "obsidian";
+import {Processor, ProcessorContext} from "./processor";
+import {Platform} from "obsidian";
 import * as plantuml from "plantuml-encoder";
 import {insertAsciiImage, insertImageWithMap, insertSvgImage} from "../functions";
 import {OutputType} from "../const";
@@ -10,6 +10,12 @@ let execFile: typeof import('child_process').execFile;
 let Buffer: typeof import('buffer').Buffer;
 let pathModule: typeof import('path');
 let osModule: typeof import('os');
+let fsModule: typeof import('fs');
+
+// execFile kills PlantUML once its output exceeds maxBuffer (1 MB by default), which large PNGs easily do
+const MAX_BUFFER = 64 * 1024 * 1024;
+// a java process that never exits would otherwise leave the diagram loading forever
+const TIMEOUT_SECONDS = 60;
 
 async function loadNodeModules() {
     if (Platform.isDesktop && !execFile) {
@@ -19,7 +25,13 @@ async function loadNodeModules() {
         Buffer = (nodeRequire('buffer') as typeof import('buffer')).Buffer;
         pathModule = nodeRequire('path') as typeof import('path');
         osModule = nodeRequire('os') as typeof import('os');
+        fsModule = nodeRequire('fs') as typeof import('fs');
     }
+}
+
+interface LocalImage {
+    image: string;
+    error: boolean;
 }
 
 export class LocalProcessors implements Processor {
@@ -30,7 +42,7 @@ export class LocalProcessors implements Processor {
         this.plugin = plugin;
     }
 
-    ascii = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+    ascii = async(source: string, el: HTMLElement, ctx: ProcessorContext) => {
         if (!Platform.isDesktop) {
             throw new Error('Local processing is only available on desktop');
         }
@@ -46,14 +58,16 @@ export class LocalProcessors implements Processor {
             return;
         }
 
-        const image = await this.generateLocalImage(source, OutputType.ASCII, this.plugin.replacer.getPath(ctx));
-        const includes = parseIncludedFiles(source);
-        const entry: DiagramCacheEntry = { ts: Date.now(), ascii: image, includes, ...cached && { png: cached.png, svg: cached.svg, map: cached.map } };
-        await this.plugin.cache.set(encoded, entry);
+        const {image, error} = await this.generateLocalImage(source, OutputType.ASCII, this.plugin.replacer.getPath(ctx));
+        if (!error) {
+            const includes = parseIncludedFiles(source);
+            const entry: DiagramCacheEntry = { ts: Date.now(), ascii: image, includes, ...cached && { png: cached.png, svg: cached.svg, map: cached.map } };
+            await this.plugin.cache.set(encoded, entry);
+        }
         insertAsciiImage(el, image);
     }
 
-    png = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+    png = async(source: string, el: HTMLElement, ctx: ProcessorContext) => {
         if (!Platform.isDesktop) {
             throw new Error('Local processing is only available on desktop');
         }
@@ -70,17 +84,19 @@ export class LocalProcessors implements Processor {
         }
 
         const path = this.plugin.replacer.getPath(ctx);
-        const [image, map] = await Promise.all([
+        const [{image, error}, map] = await Promise.all([
             this.generateLocalImage(source, OutputType.PNG, path),
             this.generateLocalMap(source, path),
         ]);
-        const includes = parseIncludedFiles(source);
-        const entry: DiagramCacheEntry = { ts: Date.now(), png: image, map, includes, ...cached && { svg: cached.svg, ascii: cached.ascii } };
-        await this.plugin.cache.set(encoded, entry);
+        if (!error) {
+            const includes = parseIncludedFiles(source);
+            const entry: DiagramCacheEntry = { ts: Date.now(), png: image, map, includes, ...cached && { svg: cached.svg, ascii: cached.ascii } };
+            await this.plugin.cache.set(encoded, entry);
+        }
         insertImageWithMap(el, image, map, encoded);
     }
 
-    svg = async(source: string, el: HTMLElement, ctx: MarkdownPostProcessorContext) => {
+    svg = async(source: string, el: HTMLElement, ctx: ProcessorContext) => {
         if (!Platform.isDesktop) {
             throw new Error('Local processing is only available on desktop');
         }
@@ -96,10 +112,12 @@ export class LocalProcessors implements Processor {
             return;
         }
 
-        const image = await this.generateLocalImage(source, OutputType.SVG, this.plugin.replacer.getPath(ctx));
-        const includes = parseIncludedFiles(source);
-        const entry: DiagramCacheEntry = { ts: Date.now(), svg: image, includes, ...cached && { png: cached.png, map: cached.map, ascii: cached.ascii } };
-        await this.plugin.cache.set(encoded, entry);
+        const {image, error} = await this.generateLocalImage(source, OutputType.SVG, this.plugin.replacer.getPath(ctx));
+        if (!error) {
+            const includes = parseIncludedFiles(source);
+            const entry: DiagramCacheEntry = { ts: Date.now(), svg: image, includes, ...cached && { png: cached.png, map: cached.map, ascii: cached.ascii } };
+            await this.plugin.cache.set(encoded, entry);
+        }
         insertSvgImage(el, image);
     }
 
@@ -109,89 +127,78 @@ export class LocalProcessors implements Processor {
         }
 
         const {cmd, args} = await this.resolveLocalJarCmd();
-        const child = execFile(cmd, args.concat(['-pipemap']), {encoding: 'binary', cwd: path});
-
-        let stdout = "";
-
-        if (child.stdout) {
-            child.stdout.on("data", (data: string) => {
-                stdout += data;
-            });
-        }
-
-        return new Promise((resolve, reject) => {
-            child.on("error", reject);
-
-            child.on("close", (code) => {
-                if (code === 0) {
-                    resolve(stdout);
-                    return;
-                } else if (code === 1) {
-                    console.error(stdout);
-                    reject(new Error(`an error occurred`));
-                } else {
-                    reject(new Error(`child exited with code ${String(code)}`));
-                }
-            });
-
-            child.stdin?.write(source);
-            child.stdin?.end();
-        });
+        const {stdout} = await this.run(cmd, args.concat(['-pipemap']), source, 'binary', path);
+        return stdout;
     }
 
-    async generateLocalImage(source: string, type: OutputType, path: string): Promise<string> {
+    async generateLocalImage(source: string, type: OutputType, path: string): Promise<LocalImage> {
         if (!Platform.isDesktop) {
             throw new Error('Local processing is only available on desktop');
         }
 
         const {cmd, args} = await this.resolveLocalJarCmd();
-        const cmdArgs = args.concat(['-t' + type, '-pipe']);
+        const encoding = type === OutputType.PNG ? 'binary' : 'utf-8';
+        const {stdout, error} = await this.run(cmd, args.concat(['-t' + type, '-pipe']), source, encoding, path);
 
-        const child = execFile(cmd, cmdArgs, {
-            encoding: type === OutputType.PNG ? 'binary' : 'utf-8',
-            cwd: path
-        });
+        const image = type === OutputType.PNG ? Buffer.from(stdout, 'binary').toString('base64') : stdout;
+        return {image, error};
+    }
 
-        let stdout: string | null = null;
-        let stderr: string | null = null;
-
-        if (child.stdout) {
-            child.stdout.on("data", (data: string) => {
-                stdout = stdout === null ? data : stdout + data;
-            });
-        }
-
-        if (child.stderr) {
-            child.stderr.on('data', (data: string) => {
-                stderr = stderr === null ? data : stderr + data;
-            });
-        }
-
+    /**
+     * pipe the source through PlantUML, the promise always settles once the process has exited or was stopped.
+     * PlantUML renders syntax errors and Graphviz failures into the diagram, so any output is treated as a result,
+     * `error` marks those so they don't get cached.
+     */
+    private run(cmd: string, args: string[], source: string, encoding: 'binary' | 'utf-8', cwd: string): Promise<{stdout: string, error: boolean}> {
         return new Promise((resolve, reject) => {
-            child.on("error", reject);
+            let stdout = "";
+            let stderr = "";
+            let failed = false;
 
-            child.on("close", (code) => {
-                if (stdout === null) {
-                    return;
-                }
-                if (code === 0) {
-                    if (type === OutputType.PNG) {
-                        resolve(Buffer.from(stdout, 'binary').toString('base64'));
-                        return;
-                    }
-                    resolve(stdout);
-                    return;
-                } else if (code === 1) {
-                    console.error(stdout);
-                    reject(new Error(stderr ?? ''));
-                } else {
-                    if (type === OutputType.PNG) {
-                        resolve(Buffer.from(stdout, 'binary').toString('base64'));
-                        return;
-                    }
-                    resolve(stdout);
-                }
+            const fail = (message: string) => {
+                if (failed) return;
+                failed = true;
+                window.clearTimeout(timeout);
+                reject(new Error(message));
+            };
+
+            const child = execFile(cmd, args, {encoding, cwd, maxBuffer: MAX_BUFFER});
+            const timeout = window.setTimeout(() => {
+                child.kill('SIGKILL');
+                fail(`PlantUML did not finish within ${TIMEOUT_SECONDS} seconds and was stopped.`);
+            }, TIMEOUT_SECONDS * 1000);
+
+            child.stdout?.on("data", (data: string) => {
+                stdout += data;
             });
+            child.stderr?.on("data", (data: string) => {
+                stderr += data;
+            });
+
+            child.on("error", (error: Error & {code?: string}) => {
+                if (error.code === 'ENOENT') {
+                    fail(`Could not start "${cmd}": ${error.message}\nCheck the "Java path" setting and that Java is installed.`);
+                    return;
+                }
+                fail(`Could not start "${cmd}": ${error.message}`);
+            });
+
+            child.on("close", (code: number | null, signal: string | null) => {
+                if (failed) return;
+                window.clearTimeout(timeout);
+                if (stderr.length > 0) {
+                    console.warn("PlantUML:", stderr);
+                }
+                if (code === 0 || (code !== null && stdout.length > 0)) {
+                    resolve({stdout, error: code !== 0 || /exception|error/i.test(stderr)});
+                    return;
+                }
+                const reason = code === null ? `was terminated (${signal})` : `exited with code ${String(code)}`;
+                fail(`PlantUML ${reason}` + (stderr.trim().length > 0 ? `:\n${stderr.trim()}` : ''));
+            });
+
+            // the process may be gone before it read the source, the close handler reports that
+            child.stdin?.on("error", () => undefined);
             child.stdin?.write(source, "utf-8");
             child.stdin?.end();
         });
@@ -206,42 +213,38 @@ export class LocalProcessors implements Processor {
             throw new Error('Local processing is only available on desktop');
         }
 
-        const jarFromSettings = this.plugin.settings.localJar;
-        let jarFullPath: string;
-        const path = this.plugin.replacer.getFullPath("");
+        await loadNodeModules();
 
-        if (jarFromSettings[0] === '~') {
-            // As a workaround, I'm not sure what would isAbsolute() return with unix-like path
-            jarFullPath = osModule.userInfo().homedir + jarFromSettings.slice(1);
-        }
-        else {
-            if (pathModule.isAbsolute(jarFromSettings)) {
-                jarFullPath = jarFromSettings;
-            }
-            else {
-                // the default search path is current vault
-                jarFullPath = pathModule.resolve(path, jarFromSettings);
-            }
-        }
-
-        if (jarFullPath.length == 0) {
+        const jarFromSettings = this.expandPath(this.plugin.settings.localJar);
+        if (jarFromSettings.length == 0) {
             throw Error('Invalid local jar file');
         }
 
-        let javaPath = this.plugin.settings.javaPath;
-        if (javaPath[0] === '~') {
-            javaPath = osModule.userInfo().homedir + javaPath.slice(1);
+        let jarFullPath: string;
+        const path = this.plugin.replacer.getFullPath("");
+
+        if (pathModule.isAbsolute(jarFromSettings)) {
+            jarFullPath = jarFromSettings;
+        }
+        else {
+            // the default search path is current vault
+            jarFullPath = pathModule.resolve(path, jarFromSettings);
         }
 
-        let dotPath = this.plugin.settings.dotPath;
-        if (dotPath[0] === '~') {
-            dotPath = osModule.userInfo().homedir + dotPath.slice(1);
+        try {
+            await fsModule.promises.access(jarFullPath);
+        } catch {
+            throw new Error(`PlantUML jar not found at "${jarFullPath}".\nCheck the "Local JAR" setting.`);
         }
+
+        const javaPath = this.expandPath(this.plugin.settings.javaPath) || 'java';
+
+        const dotPath = this.expandPath(this.plugin.settings.dotPath);
         const graphvizArgs = dotPath
             ? ['-graphvizdot', dotPath]
             : [];
 
-        if(jarFullPath.endsWith('.jar')) {
+        if(jarFullPath.toLowerCase().endsWith('.jar')) {
             return {
                 cmd: javaPath,
                 args: ['-Djava.awt.headless=true', '-Dapple.awt.UIElement=true', '-jar', jarFullPath, '-charset', 'utf-8', ...graphvizArgs]
@@ -251,5 +254,20 @@ export class LocalProcessors implements Processor {
             cmd: jarFullPath,
             args: ['-Djava.awt.headless=true', '-Dapple.awt.UIElement=true', '-charset', 'utf-8', ...graphvizArgs]
         };
+    }
+
+    /**
+     * trim the path, remove the quotes Windows adds when using "Copy as path"
+     * and expand ~ to the home directory
+     */
+    private expandPath(path: string): string {
+        let expanded = path.trim();
+        if (expanded.length >= 2 && expanded.startsWith('"') && expanded.endsWith('"')) {
+            expanded = expanded.slice(1, -1).trim();
+        }
+        if (expanded[0] === '~') {
+            expanded = osModule.userInfo().homedir + expanded.slice(1);
+        }
+        return expanded;
     }
 }

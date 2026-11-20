@@ -11,7 +11,6 @@ import {Processor} from "./processors/processor";
 import {ServerProcessor} from "./processors/serverProcessor";
 import {Replacer} from "./functions";
 import {PumlView, VIEW_TYPE} from "./PumlView";
-import localforage from "localforage";
 import {PumlEmbed} from "./embed";
 
 declare module "obsidian" {
@@ -45,6 +44,7 @@ export default class PlantumlPlugin extends Plugin {
 
     serverProcessor: Processor;
     localProcessor: Processor;
+    debouncedProcessor: DebouncedProcessors;
     replacer: Replacer;
 
     observer: MutationObserver;
@@ -79,6 +79,7 @@ export default class PlantumlPlugin extends Plugin {
             }
 
             const processor = new DebouncedProcessors(this);
+            this.debouncedProcessor = processor;
 
             addIcon("document-" + VIEW_TYPE, LOGO_SVG);
             this.registerView(VIEW_TYPE, (leaf) => {
@@ -86,11 +87,11 @@ export default class PlantumlPlugin extends Plugin {
             });
             this.registerExtensions(["puml", "pu"], VIEW_TYPE);
 
-            this.registerMarkdownCodeBlockProcessor("plantuml", processor.default);
+            this.registerMarkdownCodeBlockProcessor("plantuml", processor.codeBlock);
             this.registerMarkdownCodeBlockProcessor("plantuml-png", processor.png);
             this.registerMarkdownCodeBlockProcessor("plantuml-ascii", processor.ascii);
             this.registerMarkdownCodeBlockProcessor("plantuml-svg", processor.svg);
-            this.registerMarkdownCodeBlockProcessor("puml", processor.default);
+            this.registerMarkdownCodeBlockProcessor("puml", processor.codeBlock);
             this.registerMarkdownCodeBlockProcessor("puml-png", processor.png);
             this.registerMarkdownCodeBlockProcessor("puml-svg", processor.svg);
             this.registerMarkdownCodeBlockProcessor("puml-ascii", processor.ascii);
@@ -106,12 +107,13 @@ export default class PlantumlPlugin extends Plugin {
                 callback: () => void this.cache.clear(true),
             });
 
-            localforage.config({
-                name: 'puml',
-                description: 'PlantUML plugin'
-            });
-            await this.cache.migrateFromV1();
-            await this.cache.evictExpired(this.settings.cache);
+            try {
+                await this.cache.migrateFromV1();
+                await this.cache.evictExpired(this.settings.cache);
+            } catch (error) {
+                // the rest of the plugin works without the cache
+                console.warn('PlantUML: diagram cache unavailable', error);
+            }
 
             //internal links
             this.observer = new MutationObserver((mutations) => {
@@ -161,11 +163,7 @@ export default class PlantumlPlugin extends Plugin {
 
         const fileContent = await this.app.vault.read(file);
         const imgDiv = createDiv();
-        if(this.settings.defaultProcessor === "png") {
-            await this.getProcessor().png(fileContent, imgDiv, null);
-        }else {
-            await this.getProcessor().svg(fileContent, imgDiv, null);
-        }
+        await this.debouncedProcessor.default(fileContent, imgDiv, {sourcePath: file.path});
 
         const node: Node = mutations[0].addedNodes[0];
         node.empty();
