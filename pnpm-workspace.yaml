@@ -1,0 +1,14 @@
+packages:
+  - .
+# npm deduped these to the pinned root versions; keep pnpm from pulling in
+# a second copy (duplicate @codemirror/state breaks the editor types).
+overrides:
+  "@codemirror/state": $@codemirror/state
+  "@codemirror/view": $@codemirror/view
+onlyBuiltDependencies:
+  - esbuild
+  - "@codemirror/language@https://codeload.github.com/lishid/cm-language/tar.gz/2d416d7835867d1b1e8d0e726b147fc1135c9f92"
+minimumReleaseAge: 4320
+minimumReleaseAgeExclude:
+  - "@adfc/*"
+trustPolicy: no-downgrade
