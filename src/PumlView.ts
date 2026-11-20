@@ -10,6 +10,7 @@ import {
 import {Annotation, EditorState, Extension, Transaction} from "@codemirror/state";
 import {highlightSelectionMatches, search} from "@codemirror/search";
 import {defaultKeymap, history, indentWithTab} from "@codemirror/commands";
+import {plantumlLanguage} from "./syntaxHighlighting";
 
 export const VIEW_TYPE = "plantuml";
 
@@ -56,6 +57,7 @@ export class PumlView extends TextFileView {
         keymap.of([...defaultKeymap, indentWithTab]),
         history(),
         search(),
+        plantumlLanguage,
         EditorView.updateListener.of(v => {
             if(v.docChanged) {
                 this.requestSave();
